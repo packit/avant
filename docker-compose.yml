@@ -1,0 +1,56 @@
+version: "2"
+
+services:
+  redis:
+    image: quay.io/sclorg/redis-6-c9s
+    container_name: redis
+    ports:
+      - 6379:6379
+    user: "1024"
+
+  postgres:
+    container_name: postgres
+    image: quay.io/sclorg/postgresql-15-c9s
+    environment:
+      POSTGRESQL_USER: packit
+      POSTGRESQL_PASSWORD: secret-password
+      POSTGRESQL_DATABASE: packit
+    ports:
+      - 5432:5432
+    deploy:
+      resources:
+        limits:
+          memory: 2GB
+        reservations:
+          memory: 1G
+
+  service:
+    container_name: service
+    build:
+      context: .
+      dockerfile: files/docker/Dockerfile
+      args:
+        SOURCE_BRANCH: main
+    image: quay.io/packit/packit-service:dev
+    command: /usr/bin/run_httpd.sh
+    depends_on:
+      - redis
+      - postgres
+    ports:
+      - 443:443
+    environment:
+      DEPLOYMENT: dev
+      REDIS_SERVICE_HOST: redis
+      POSTGRESQL_USER: packit
+      POSTGRESQL_PASSWORD: secret-password
+      POSTGRESQL_HOST: postgres
+      POSTGRESQL_DATABASE: packit
+    volumes:
+      - ./packit_service:/src/packit_service:ro,z
+      - ./alembic:/src/alembic:rw,z
+      - ./secrets/packit/dev/packit-service.yaml:/home/packit/.config/packit-service.yaml:ro,z
+      - ./secrets/packit/dev/fedora.keytab:/secrets/fedora.keytab:ro,z
+      - ./secrets/packit/dev/fullchain.pem:/secrets/fullchain.pem:ro,z
+      - ./secrets/packit/dev/privkey.pem:/secrets/privkey.pem:ro,z
+      - ./files/run_httpd.sh:/usr/bin/run_httpd.sh:ro,z
+    user: "1024"
