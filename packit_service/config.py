@@ -42,8 +42,7 @@ class ProjectToSync(NamedTuple):
 
     def __repr__(self):
         return (
-            f"ProjectToSync(forge={self.forge}, repo_namespace={
-                self.repo_namespace}, "
+            f"ProjectToSync(forge={self.forge}, repo_namespace={self.repo_namespace}, "
             f"repo_name={self.repo_name}, branch={self.branch}, "
             f"dg_repo_name={self.dg_repo_name}, dg_branch={self.dg_branch})"
         )
@@ -91,28 +90,21 @@ class ServiceConfig(Config):
         validate_webhooks: bool = True,
         admins: Optional[list] = None,
         fas_password: Optional[str] = "",
-        enabled_private_namespaces: Optional[Union[set[str],
-                                                   list[str]]] = None,
+        enabled_private_namespaces: Optional[Union[set[str], list[str]]] = None,
         gitlab_token_secret: str = "",
         gitlab_mr_targets_handled: Optional[list[MRTarget]] = None,
         projects_to_sync: Optional[list[ProjectToSync]] = None,
-        enabled_projects_for_internal_tf: Optional[Union[set[str],
-                                                         list[str]]] = None,
+        enabled_projects_for_internal_tf: Optional[Union[set[str], list[str]]] = None,
         dashboard_url: str = "",
         koji_logs_url: str = "https://kojipkgs.fedoraproject.org",
         koji_web_url: str = "https://koji.fedoraproject.org",
-        enabled_projects_for_srpm_in_copr: Optional[Union[set[str],
-                                                          list[str]]] = None,
+        enabled_projects_for_srpm_in_copr: Optional[Union[set[str], list[str]]] = None,
         comment_command_prefix: str = "/packit",
         redhat_api_refresh_token: Optional[str] = None,
         package_config_path_override: Optional[str] = None,
         command_handler_storage_class: Optional[str] = None,
         appcode: Optional[str] = None,
-        enabled_projects_for_fedora_ci: Optional[Union[set[str],
-                                                       list[str]]] = None,
-        forgejo_instance_url: Optional[str] = None,
-        forgejo_api_key: Optional[str] = None,
-        forgejo_namespace: Optional[str] = None,
+        enabled_projects_for_fedora_ci: Optional[Union[set[str], list[str]]] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -159,8 +151,7 @@ class ServiceConfig(Config):
 
         # e.g.:
         #  - https://src.fedoraproject.org/rpms/packit
-        self.enabled_projects_for_fedora_ci: set[str] = set(
-            enabled_projects_for_fedora_ci or [])
+        self.enabled_projects_for_fedora_ci: set[str] = set(enabled_projects_for_fedora_ci or [])
 
         self.projects_to_sync = projects_to_sync or []
 
@@ -187,9 +178,6 @@ class ServiceConfig(Config):
 
         # Appcode used in MP+ to differentiate applications
         self.appcode = appcode
-        self.forgejo_instance_url = forgejo_instance_url
-        self.forgejo_api_key = forgejo_api_key
-        self.forgejo_namespace = forgejo_namespace
 
     service_config = None
 
@@ -204,31 +192,23 @@ class ServiceConfig(Config):
             f"webhook_secret='{hide(self.webhook_secret)}', "
             f"testing_farm_secret='{hide(self.testing_farm_secret)}', "
             f"testing_farm_api_url='{self.testing_farm_api_url}', "
-            f"internal_testing_farm_secret='{
-                hide(self.internal_testing_farm_secret)}', "
+            f"internal_testing_farm_secret='{hide(self.internal_testing_farm_secret)}', "
             f"validate_webhooks='{self.validate_webhooks}', "
             f"admins='{self.admins}', "
             f"fas_password='{hide(self.fas_password)}', "
             f"gitlab_token_secret='{hide(self.gitlab_token_secret)}',"
             f"gitlab_mr_targets_handled='{self.gitlab_mr_targets_handled}', "
             f"enabled_private_namespaces='{self.enabled_private_namespaces}', "
-            f"enabled_projects_for_internal_tf='{
-                self.enabled_projects_for_internal_tf}', "
+            f"enabled_projects_for_internal_tf='{self.enabled_projects_for_internal_tf}', "
             f"server_name='{self.server_name}', "
             f"dashboard_url='{self.dashboard_url}', "
             f"koji_logs_url='{self.koji_logs_url}', "
             f"koji_web_url='{self.koji_web_url}', "
-            f"enabled_projects_for_srpm_in_copr= '{
-                self.enabled_projects_for_srpm_in_copr}', "
+            f"enabled_projects_for_srpm_in_copr= '{self.enabled_projects_for_srpm_in_copr}', "
             f"comment_command_prefix='{self.comment_command_prefix}', "
-            f"redhat_api_refresh_token='{
-                hide(self.redhat_api_refresh_token)}', "
-            f"package_config_path_override='{
-                self.package_config_path_override}', "
-            f"enabled_projects_for_fedora_ci='{
-                self.enabled_projects_for_fedora_ci}')"
-            f"forgejo_instance_url='{self.forgejo_instance_url}', "
-            f"forgejo_api_key='{hide(self.forgejo_api_key)}', "
+            f"redhat_api_refresh_token='{hide(self.redhat_api_refresh_token)}', "
+            f"package_config_path_override='{self.package_config_path_override}', "
+            f"enabled_projects_for_fedora_ci='{self.enabled_projects_for_fedora_ci}')"
         )
 
     @classmethod
@@ -238,7 +218,7 @@ class ServiceConfig(Config):
 
         config = ServiceConfigSchema().load(raw_dict)
 
-        config.server_name = raw_dict.get("server_name", "")
+        config.server_name = raw_dict.get("server_name", "localhost:5000")
 
         config.command_handler = RunCommandType.local
         a_h = raw_dict.get("command_handler")
@@ -284,11 +264,9 @@ class ServiceConfig(Config):
                     loaded_config = safe_load(file_stream)
             except Exception as ex:
                 logger.error(f"Cannot load service config '{config_file}'.")
-                raise PackitException(
-                    f"Cannot load service config: {ex}.") from ex
+                raise PackitException(f"Cannot load service config: {ex}.") from ex
 
-            cls.service_config = ServiceConfig.get_from_dict(
-                raw_dict=loaded_config)
+            cls.service_config = ServiceConfig.get_from_dict(raw_dict=loaded_config)
         return cls.service_config
 
     def get_project_to_sync(self, dg_repo_name, dg_branch) -> Optional[ProjectToSync]:

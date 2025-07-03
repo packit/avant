@@ -168,7 +168,6 @@ class EventData:
             "github.pr.Action",
             "pagure.pr.Action",
             "gitlab.mr.Action",
-            "forgejo.pr.Action",
             "github.pr.Comment",
             "pagure.pr.Comment",
             "gitlab.mr.Comment",

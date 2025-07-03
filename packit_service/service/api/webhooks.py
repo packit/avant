@@ -45,7 +45,6 @@ ping_payload_gitlab = ns.model(
     },
 )
 
-
 github_webhook_calls = Counter(
     "github_webhook_calls",
     "Number of times the GitHub webhook is called",
@@ -72,17 +71,13 @@ class GithubWebhook(Resource):
         msg = request.json
 
         if not msg:
-            logger.debug(
-                "/webhooks/github: we haven't received any JSON data.")
-            github_webhook_calls.labels(
-                result="no_data", process_id=os.getpid()).inc()
+            logger.debug("/webhooks/github: we haven't received any JSON data.")
+            github_webhook_calls.labels(result="no_data", process_id=os.getpid()).inc()
             return "We haven't received any JSON data.", HTTPStatus.BAD_REQUEST
 
         if all([msg.get("zen"), msg.get("hook_id"), msg.get("hook")]):
-            logger.debug(
-                f"/webhooks/github received ping event: {msg['hook']}")
-            github_webhook_calls.labels(
-                result="pong", process_id=os.getpid()).inc()
+            logger.debug(f"/webhooks/github received ping event: {msg['hook']}")
+            github_webhook_calls.labels(result="pong", process_id=os.getpid()).inc()
             return "Pong!", HTTPStatus.OK
 
         try:
@@ -103,16 +98,14 @@ class GithubWebhook(Resource):
             return "Thanks but we don't care about this event", HTTPStatus.ACCEPTED
 
         celery_app.send_task(
-            name=getenv(
-                "CELERY_MAIN_TASK_NAME") or CELERY_DEFAULT_MAIN_TASK_NAME,
+            name=getenv("CELERY_MAIN_TASK_NAME") or CELERY_DEFAULT_MAIN_TASK_NAME,
             kwargs={
                 "event": msg,
                 "source": "github",
                 "event_type": request.headers.get("X-GitHub-Event"),
             },
         )
-        github_webhook_calls.labels(
-            result="accepted", process_id=os.getpid()).inc()
+        github_webhook_calls.labels(result="accepted", process_id=os.getpid()).inc()
 
         return "Webhook accepted. We thank you, Github.", HTTPStatus.ACCEPTED
 
@@ -140,8 +133,7 @@ class GithubWebhook(Resource):
         }
         _interested = interests.get(event, False)
 
-        logger.debug(f"{event} {uuid}{
-                     '' if _interested else ' (not interested)'}")
+        logger.debug(f"{event} {uuid}{'' if _interested else ' (not interested)'}")
         return _interested
 
     @staticmethod
@@ -166,14 +158,12 @@ class GithubWebhook(Resource):
             raise ValidationFailed(msg)
 
         signature = request.headers["X-Hub-Signature-256"].split("=")[1]
-        data_hmac = hmac.new(
-            webhook_secret, msg=request.get_data(), digestmod=sha256)
+        data_hmac = hmac.new(webhook_secret, msg=request.get_data(), digestmod=sha256)
         if not hmac.compare_digest(signature, data_hmac.hexdigest()):
             msg = "Payload signature validation failed."
             logger.warning(msg)
             logger.debug(
-                f"X-Hub-Signature-256: {signature!r} != computed: {
-                    data_hmac.hexdigest()}",
+                f"X-Hub-Signature-256: {signature!r} != computed: {data_hmac.hexdigest()}",
             )
             raise ValidationFailed(msg)
 
@@ -196,13 +186,11 @@ class GitlabWebhook(Resource):
         msg = request.json
 
         if not msg:
-            logger.debug(
-                "/webhooks/gitlab: we haven't received any JSON data.")
+            logger.debug("/webhooks/gitlab: we haven't received any JSON data.")
             return "We haven't received any JSON data.", HTTPStatus.BAD_REQUEST
 
         if all([msg.get("zen"), msg.get("hook_id"), msg.get("hook")]):
-            logger.debug(
-                f"/webhooks/gitlab received ping event: {msg['hook']}")
+            logger.debug(f"/webhooks/gitlab received ping event: {msg['hook']}")
             return "Pong!", HTTPStatus.OK
 
         try:
@@ -215,8 +203,7 @@ class GitlabWebhook(Resource):
             return "Thanks but we don't care about this event", HTTPStatus.ACCEPTED
 
         celery_app.send_task(
-            name=getenv(
-                "CELERY_MAIN_TASK_NAME") or CELERY_DEFAULT_MAIN_TASK_NAME,
+            name=getenv("CELERY_MAIN_TASK_NAME") or CELERY_DEFAULT_MAIN_TASK_NAME,
             kwargs={
                 "event": msg,
                 "source": "gitlab",
@@ -317,8 +304,7 @@ class GitlabWebhook(Resource):
             raise ValidationFailed(msg_failed_error) from exc
 
         project_data = json.loads(request.data)["project"]
-        git_http_url = project_data.get(
-            "git_http_url") or project_data["http_url"]
+        git_http_url = project_data.get("git_http_url") or project_data["http_url"]
         parsed_url = parse_git_repo(potential_url=git_http_url)
 
         # "repo_name" might be missing in token_decoded if the token is for group/namespace
@@ -356,139 +342,5 @@ class GitlabWebhook(Resource):
             return True
         _interested = event_type in interesting_events
 
-        logger.debug(f"{event_type} {
-                     ' (not interested)' if not _interested else ''}")
-        return _interested
-
-
-forgejo_webhook_calls = Counter(
-    "forgejo_webhook_calls",
-    "Number of times the Forgejo webhook is called",
-    ["result", "process_id"],
-)
-
-
-@ns.route("/forgejo")
-class ForgejoWebhook(Resource):
-    @ns.response(HTTPStatus.OK.value, "Webhook accepted, returning reply")
-    @ns.response(
-        HTTPStatus.ACCEPTED.value,
-        "Webhook accepted, request is being processed",
-    )
-    @ns.response(HTTPStatus.BAD_REQUEST.value, "Bad request data")
-    @ns.response(HTTPStatus.UNAUTHORIZED.value, "X-Forgejo-Signature validation failed")
-    @ns.expect(ping_payload)
-    def post(self):
-        msg = request.json
-
-        if not msg:
-            logger.debug("/webhooks/forgejo: no JSON data received.")
-            forgejo_webhook_calls.labels(
-                result="no_data", process_id=os.getpid()).inc()
-            return "No JSON data.", HTTPStatus.BAD_REQUEST
-
-        if all([msg.get("zen"), msg.get("hook_id"), msg.get("hook")]):
-            logger.debug(
-                f"/webhooks/forgejo received ping event: {msg['hook']}")
-            forgejo_webhook_calls.labels(
-                result="pong", process_id=os.getpid()).inc()
-            return "Pong!", HTTPStatus.OK
-        # TODO
-        # try:
-        #     self.validate_token()
-        # except ValidationFailed as exc:
-        #     logger.info(f"/webhooks/forgejo {exc}")
-        #     forgejo_webhook_calls.labels(
-        #         result="invalid_signature",
-        #         process_id=os.getpid(),
-        #     ).inc()
-        #     return str(exc), HTTPStatus.UNAUTHORIZED
-        #
-        if not self.interested(msg):
-            forgejo_webhook_calls.labels(
-                result="not_interested",
-                process_id=os.getpid(),
-            ).inc()
-            return "Thanks but we don't care about this event", HTTPStatus.ACCEPTED
-
-        celery_app.send_task(
-            name=getenv(
-                "CELERY_MAIN_TASK_NAME") or CELERY_DEFAULT_MAIN_TASK_NAME,
-            kwargs={
-                "event": msg,
-                "source": "forgejo",
-                "event_type": request.headers.get("X-Forgejo-Event"),
-            },
-        )
-        forgejo_webhook_calls.labels(
-            result="accepted", process_id=os.getpid()).inc()
-
-        return "Webhook accepted. We thank you, Forgejo.", HTTPStatus.ACCEPTED
-
-    def validate_token(self):
-        """
-        Validate the Forgejo webhook signature.
-        The signature is a direct SHA256 HMAC hex digest of the raw request body
-        using the webhook secret as the key, in a similar fashion to Github.
-        """
-        if "X-Forgejo-Signature" not in request.headers:
-            logger.debug("Ain't validating signatures.")
-            return
-
-        if not (webhook_secret := getenv("WEBHOOK_SECRET")):
-            msg = "'webhook_secret' not specified in the config."
-            logger.error(msg)
-            raise ValidationFailed(msg)
-
-        # Get raw payload
-        payload = request.get_data()
-        if not payload:
-            msg = "No payload received."
-            logger.error(msg)
-            raise ValidationFailed(msg)
-
-        data_hmac = hmac.new(
-            webhook_secret.encode(),
-            msg=payload,
-            digestmod=sha256
-        )
-        payload_signature = data_hmac.hexdigest()
-        header_sig = request.headers["X-Forgejo-Signature"]
-
-        if header_sig != payload_signature:
-            msg = "Payload signature validation failed."
-            logger.warning(msg)
-            logger.debug(
-                f"X-Forgejo-Signature: {
-                    header_sig!r} != computed: {payload_signature}",
-            )
-            raise ValidationFailed(msg)
-
-    @staticmethod
-    def interested(msg):
-        """
-        Check whether we want to process this event.
-
-        Args:
-            msg: The webhook payload as a dictionary
-
-        Returns:
-            bool: False if we are not interested in this kind of event
-        """
-        event = request.headers.get("X-Forgejo-Event")
-        uuid = request.headers.get("X-Forgejo-Delivery")
-        action = msg.get("action") if msg else None
-        deleted = msg.get("deleted") if msg else None
-
-        interests = {
-            "push": not deleted,
-            "release": action == "published",
-            "issues": action in {"opened", "edited", "closed", "reopened"},
-            "issue_comment": action in {"created", "edited"},
-            "pull_request": action in {"opened", "edited", "closed", "reopened", "synchronize"},
-        }
-        _interested = interests.get(event or "", False)
-
-        logger.debug(f"{event} {uuid}{
-                     '' if _interested else ' (not interested)'}")
+        logger.debug(f"{event_type} {' (not interested)' if not _interested else ''}")
         return _interested

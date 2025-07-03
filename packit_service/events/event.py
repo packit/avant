@@ -117,7 +117,6 @@ class Event(ABC):
         the event.
         """
         return [
-            "_parent"
             "_db_project_object",
             "_db_project_event",
             "_project",
@@ -133,7 +132,8 @@ class Event(ABC):
         d["event_type"] = self.event_type()
 
         # we are trying to be lazy => don't touch database if it is not needed
-        d["event_id"] = None
+        d["event_id"] = self._db_project_object.id if self._db_project_object else None
+
         d["created_at"] = int(d["created_at"].timestamp())
         task_accepted_time = d.get("task_accepted_time")
         d["task_accepted_time"] = (

@@ -104,13 +104,13 @@ Talisman(
 application = DispatcherMiddleware(packit_as_a_service, {"/metrics": prometheus_app()})
 
 # With the code below, you can debug ALL requests coming to flask
-# @application.before_request
-# def log_request():
-#     from flask import request, url_for
-#     import logging
-#     logger = logging.getLogger(__name__)
-#     logger.info("Request Headers %s", request.headers)
-#     logger.info("sample URL: %s", url_for(
-#         "api.doc",
-#         _external=True,  # _external = generate a URL with FQDN, not a relative one
-#     ))
+@application.before_request
+def log_request():
+    from flask import request, url_for
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Request Headers %s", request.headers)
+    logger.info("sample URL: %s", url_for(
+        "api.doc",
+        _external=True,  # _external = generate a URL with FQDN, not a relative one
+    ))

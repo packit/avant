@@ -21,15 +21,19 @@ fi
 
 export PACKIT_SERVICE_CONFIG="${HOME}/.config/packit-service.yaml"
 SERVER_NAME=$(sed -nr 's/^server_name: ([^:]+)(:([0-9]+))?$/\1/p' "$PACKIT_SERVICE_CONFIG")
-HTTPS_PORT=$(sed -nr 's/^server_name: ([^:]+)(:([0-9]+))?$/\3/p' "$PACKIT_SERVICE_CONFIG")
+HTTP_PORT=$(sed -nr 's/^server_name: ([^:]+)(:([0-9]+))?$/\3/p' "$PACKIT_SERVICE_CONFIG")
 
 # See "mod_wsgi-express-3 start-server --help" for details on
 # these options, and the configuration documentation of mod_wsgi:
 # https://modwsgi.readthedocs.io/en/master/configuration.html
-exec gunicorn \
-  -w 2 \
-  -b 0.0.0.0:8443 \
-  --certfile /secrets/fullchain.pem \
-  --keyfile /secrets/privkey.pem \
-  packit_service.service.app:application
-
+exec mod_wsgi-express-3 start-server \
+    --debug-mode \
+    --access-log \
+    --log-to-terminal \
+    --server-name "${SERVER_NAME}" \
+    --port "${HTTP_PORT:-8080}" \
+    --processes 2 \
+    --restart-interval 28800 \
+    --graceful-timeout 15 \
+    --locale "C.UTF-8" \
+    /usr/share/packit/packit.wsgi
