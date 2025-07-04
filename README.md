@@ -1,9 +1,3 @@
-<<<<<<< HEAD
-# avant
-Modernising Fedora Package Submission Process: GSoC Project
-
-Reuse packit-service's worker and implement new job as handlers.
-=======
 # Packit Service
 
 [![Build Status](https://zuul-ci.org/gated.svg)](https://softwarefactory-project.io/zuul/t/local/builds?project=packit-service/packit-service)
@@ -28,4 +22,3 @@ If you'd like to know more about packit, please check:
 - Our website: [packit.dev](https://packit.dev/)
 - GitHub project for packit tool: [packit-service/packit](https://github.com/packit/packit)
 - Hacking on packit service: [CONTRIBUTING.md](/CONTRIBUTING.md)
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)

@@ -31,16 +31,9 @@ RUN git rev-parse HEAD >/.packit-service.git.commit.hash \
 
 COPY alembic.ini ./
 COPY alembic/ ./alembic/
-<<<<<<< HEAD
-
-EXPOSE 8443
-
-CMD ["/usr/bin/run_httpd.sh"]
-=======
 COPY files/run_httpd_flask_dev.sh /usr/bin/run_httpd_flask_dev.sh
 RUN chmod +x /usr/bin/run_httpd_flask_dev.sh
 
 EXPOSE 8080
 
 CMD ["/usr/bin/run_httpd_flask_dev.sh"]
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)

@@ -2,10 +2,6 @@
 # SPDX-License-Identifier: MIT
 
 # Tasks common to all images
-<<<<<<< HEAD
--
-=======
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
 - name: Create /usr/share/packit
   ansible.builtin.file:
     state: directory
@@ -33,12 +29,3 @@
   ansible.builtin.file:
     state: absent
     path: ~/.cache/
-<<<<<<< HEAD
-- name: Copy setup_env_in_openshift.sh
-  ansible.builtin.copy:
-    src: setup_env_in_openshift.sh
-    dest: /usr/bin/setup_env_in_openshift.sh
-    mode: 0775
-=======
-
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)

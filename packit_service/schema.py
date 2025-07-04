@@ -7,11 +7,7 @@ from marshmallow import Schema, ValidationError, fields, post_load
 from packit.config.common_package_config import Deployment
 from packit.schema import UserConfigSchema
 
-<<<<<<< HEAD
-from packit_service.config import MRTarget, ProjectToSync, ServiceConfig
-=======
 from packit_service.config import MRTarget, ServiceConfig
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
 
 
 class DeploymentField(fields.Field):
@@ -30,27 +26,6 @@ class DeploymentField(fields.Field):
 
         return Deployment(value)
 
-<<<<<<< HEAD
-
-class ProjectToSyncSchema(Schema):
-    """
-    Schema for projects to sync.
-    """
-
-    forge = fields.String(required=True)
-    repo_namespace = fields.String(required=True)
-    repo_name = fields.String(required=True)
-    branch = fields.String(required=True)
-    dg_repo_name = fields.String(required=True)
-    dg_branch = fields.String(required=True)
-
-    @post_load
-    def make_instance(self, data, **_):
-        return ProjectToSync(**data)
-
-
-=======
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
 class MRTargetSchema(Schema):
     """
     Schema for MR targets to handle.
@@ -70,12 +45,6 @@ class MRTargetSchema(Schema):
 class ServiceConfigSchema(UserConfigSchema):
     deployment = DeploymentField(required=True)
     webhook_secret = fields.String()
-<<<<<<< HEAD
-    testing_farm_secret = fields.String()
-    testing_farm_api_url = fields.String()
-    internal_testing_farm_secret = fields.String()
-=======
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
     fas_password = fields.String(default="")
     validate_webhooks = fields.Bool(default=False)
     admins = fields.List(fields.String())
@@ -83,15 +52,7 @@ class ServiceConfigSchema(UserConfigSchema):
     gitlab_token_secret = fields.String()
     gitlab_mr_targets_handled = fields.List(fields.Nested(MRTargetSchema), missing=None)
     enabled_private_namespaces = fields.List(fields.String())
-<<<<<<< HEAD
-    enabled_projects_for_internal_tf = fields.List(fields.String())
-    projects_to_sync = fields.List(fields.Nested(ProjectToSyncSchema), missing=None)
     dashboard_url = fields.String()
-    koji_logs_url = fields.String()
-    koji_web_url = fields.String()
-=======
-    dashboard_url = fields.String()
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
     enabled_projects_for_srpm_in_copr = fields.List(fields.String())
     comment_command_prefix = fields.String()
     package_config_path_override = fields.String()

@@ -9,9 +9,3 @@ secrets
 *.egg-info
 .mypy_cache/
 /build/
-<<<<<<< HEAD
-
-.cursor/
-.cursor/rules/
-=======
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)

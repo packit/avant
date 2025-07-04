@@ -22,51 +22,11 @@ from packit_service.constants import (
     SANDCASTLE_IMAGE,
     SANDCASTLE_PVC,
     SANDCASTLE_WORK_DIR,
-<<<<<<< HEAD
-    TESTING_FARM_API_URL,
-=======
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
 )
 
 logger = logging.getLogger(__name__)
 
 
-<<<<<<< HEAD
-class ProjectToSync(NamedTuple):
-    """
-    Project we want to sync from downstream.
-    """
-
-    forge: str
-    repo_namespace: str
-    repo_name: str
-    branch: str
-    dg_repo_name: str
-    dg_branch: str
-
-    def __repr__(self):
-        return (
-            f"ProjectToSync(forge={self.forge}, repo_namespace={self.repo_namespace}, "
-            f"repo_name={self.repo_name}, branch={self.branch}, "
-            f"dg_repo_name={self.dg_repo_name}, dg_branch={self.dg_branch})"
-        )
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ProjectToSync):
-            raise NotImplementedError()
-
-        return (
-            self.forge == other.forge
-            and self.repo_name == other.repo_name
-            and self.repo_namespace == other.repo_namespace
-            and self.branch == other.branch
-            and self.dg_repo_name == other.dg_repo_name
-            and self.dg_branch == other.dg_branch
-        )
-
-
-=======
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
 class MRTarget(NamedTuple):
     """
     A pair of repo and branch regexes.
@@ -82,11 +42,7 @@ class MRTarget(NamedTuple):
         if not isinstance(other, MRTarget):
             raise NotImplementedError()
 
-<<<<<<< HEAD
-        return self.repo == other.repo and self.branch == self.branch
-=======
         return self.repo == other.repo and self.branch == other.branch
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
 
 
 class ServiceConfig(Config):
@@ -94,29 +50,6 @@ class ServiceConfig(Config):
         self,
         deployment: Deployment = Deployment.stg,
         webhook_secret: str = "",
-<<<<<<< HEAD
-        testing_farm_secret: str = "",
-        testing_farm_api_url: str = "",
-        internal_testing_farm_secret: str = "",
-        validate_webhooks: bool = True,
-        admins: Optional[list] = None,
-        fas_password: Optional[str] = "",
-        enabled_private_namespaces: Optional[Union[set[str], list[str]]] = None,
-        gitlab_token_secret: str = "",
-        gitlab_mr_targets_handled: Optional[list[MRTarget]] = None,
-        projects_to_sync: Optional[list[ProjectToSync]] = None,
-        enabled_projects_for_internal_tf: Optional[Union[set[str], list[str]]] = None,
-        dashboard_url: str = "",
-        koji_logs_url: str = "https://kojipkgs.fedoraproject.org",
-        koji_web_url: str = "https://koji.fedoraproject.org",
-        enabled_projects_for_srpm_in_copr: Optional[Union[set[str], list[str]]] = None,
-        comment_command_prefix: str = "/packit",
-        redhat_api_refresh_token: Optional[str] = None,
-        package_config_path_override: Optional[str] = None,
-        command_handler_storage_class: Optional[str] = None,
-        appcode: Optional[str] = None,
-        enabled_projects_for_fedora_ci: Optional[Union[set[str], list[str]]] = None,
-=======
         validate_webhooks: bool = True,
         admins: Optional[list] = None,
         enabled_private_namespaces: Optional[Union[set[str], list[str]]] = None,
@@ -127,30 +60,14 @@ class ServiceConfig(Config):
         package_config_path_override: Optional[str] = None,
         command_handler_storage_class: Optional[str] = None,
         appcode: Optional[str] = None,
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
         **kwargs,
     ):
         super().__init__(**kwargs)
 
         self.deployment = deployment
         self.webhook_secret = webhook_secret
-<<<<<<< HEAD
-        # Common secret to authenticate both, packit service (when sending request to testing farm)
-        # and testing farm (when sending notification to packit service's webhook).
-        # We might later use different secrets for those two use cases.
-        self.testing_farm_secret = testing_farm_secret
-        self.testing_farm_api_url = testing_farm_api_url
-        self.internal_testing_farm_secret = internal_testing_farm_secret
         self.validate_webhooks = validate_webhooks
 
-        # fas.fedoraproject.org needs password to authenticate
-        # 'fas_user' is inherited from packit.config.Config
-        self.fas_password = fas_password
-
-=======
-        self.validate_webhooks = validate_webhooks
-
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
         # List of github users who are allowed to trigger p-s on any repository
         self.admins: set[str] = set(admins or [])
 
@@ -160,58 +77,19 @@ class ServiceConfig(Config):
         # Gitlab token secret to decode JWT tokens
         self.gitlab_token_secret: str = gitlab_token_secret
 
-<<<<<<< HEAD
-        self.gitlab_mr_targets_handled: list[MRTarget] = gitlab_mr_targets_handled
-
-        # Explicit list of private namespaces we work with
-        # e.g.:
-        #  - github.com/other-private-namespace
-        #  - gitlab.com/private/namespace
-        self.enabled_private_namespaces: set[str] = set(
-            enabled_private_namespaces or [],
-        )
-        # Explicit list of project we allow the internal TF instance to be used-
-        # e.g.:
-        #  - github.com/other-private-namespace/project
-        #  - gitlab.com/namespace/project
-        self.enabled_projects_for_internal_tf: set[str] = set(
-            enabled_projects_for_internal_tf or [],
-        )
-
-        # e.g.:
-        #  - https://src.fedoraproject.org/rpms/packit
-        self.enabled_projects_for_fedora_ci: set[str] = set(enabled_projects_for_fedora_ci or [])
-
-        self.projects_to_sync = projects_to_sync or []
-
-        # Full URL to the dashboard, e.g. https://dashboard.packit.dev
-        self.dashboard_url = dashboard_url
-        self.koji_logs_url = koji_logs_url
-        self.koji_web_url = koji_web_url
-=======
         self.gitlab_mr_targets_handled: list[MRTarget] = gitlab_mr_targets_handled or []
 
         # Explicit list of private namespaces we work with (e.g. github.com/org, gitlab.com/group)
         self.enabled_private_namespaces: set[str] = set(
             enabled_private_namespaces or [],
         )
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
 
         self.enabled_projects_for_srpm_in_copr: set[str] = set(
             enabled_projects_for_srpm_in_copr or [],
         )
         self.comment_command_prefix = comment_command_prefix
 
-<<<<<<< HEAD
-        # Token used by the VM Image Builder. Get it here:
-        # https://access.redhat.com/management/api
-        self.redhat_api_refresh_token = redhat_api_refresh_token
-
-        # Package config path to use, instead of searching for the
-        # default names.
-=======
         # Package config path to use, instead of searching for the default names.
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
         self.package_config_path_override = package_config_path_override
 
         # Storage class that is used for temporary volumes used by Sandcastle
@@ -224,38 +102,13 @@ class ServiceConfig(Config):
 
     def __repr__(self):
         def hide(token: str) -> str:
-<<<<<<< HEAD
-=======
             token = token or ""
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
             return f"{token[:1]}***{token[-1:]}" if token else ""
 
         return (
             f"{self.__class__.__name__}("
             f"{super().__repr__()}, "
             f"deployment='{self.deployment}', "
-<<<<<<< HEAD
-            f"webhook_secret='{hide(self.webhook_secret)}', "
-            f"testing_farm_secret='{hide(self.testing_farm_secret)}', "
-            f"testing_farm_api_url='{self.testing_farm_api_url}', "
-            f"internal_testing_farm_secret='{hide(self.internal_testing_farm_secret)}', "
-            f"validate_webhooks='{self.validate_webhooks}', "
-            f"admins='{self.admins}', "
-            f"fas_password='{hide(self.fas_password)}', "
-            f"gitlab_token_secret='{hide(self.gitlab_token_secret)}',"
-            f"gitlab_mr_targets_handled='{self.gitlab_mr_targets_handled}', "
-            f"enabled_private_namespaces='{self.enabled_private_namespaces}', "
-            f"enabled_projects_for_internal_tf='{self.enabled_projects_for_internal_tf}', "
-            f"server_name='{self.server_name}', "
-            f"dashboard_url='{self.dashboard_url}', "
-            f"koji_logs_url='{self.koji_logs_url}', "
-            f"koji_web_url='{self.koji_web_url}', "
-            f"enabled_projects_for_srpm_in_copr= '{self.enabled_projects_for_srpm_in_copr}', "
-            f"comment_command_prefix='{self.comment_command_prefix}', "
-            f"redhat_api_refresh_token='{hide(self.redhat_api_refresh_token)}', "
-            f"package_config_path_override='{self.package_config_path_override}', "
-            f"enabled_projects_for_fedora_ci='{self.enabled_projects_for_fedora_ci}')"
-=======
             f"webhook_secret='{hide(self.webhook_secret or '')}', "
             f"validate_webhooks='{self.validate_webhooks}', "
             f"admins='{self.admins}', "
@@ -267,7 +120,6 @@ class ServiceConfig(Config):
             f"comment_command_prefix='{self.comment_command_prefix}', "
             f"package_config_path_override='{self.package_config_path_override}', "
             f"appcode='{self.appcode}')"
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
         )
 
     @classmethod
@@ -277,14 +129,9 @@ class ServiceConfig(Config):
 
         config = ServiceConfigSchema().load(raw_dict)
 
-<<<<<<< HEAD
-        config.server_name = raw_dict.get("server_name", "localhost:5000")
-
-=======
         if not isinstance(config, ServiceConfig):
             raise PackitException("Loaded config is not a ServiceConfig instance.")
         config.server_name = raw_dict.get("server_name", "localhost:5000")
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
         config.command_handler = RunCommandType.local
         a_h = raw_dict.get("command_handler")
         if a_h:
@@ -307,14 +154,6 @@ class ServiceConfig(Config):
             SANDCASTLE_DEFAULT_PROJECT,
         )
 
-<<<<<<< HEAD
-        config.testing_farm_api_url = raw_dict.get(
-            "testing_farm_api_url",
-            TESTING_FARM_API_URL,
-        )
-
-=======
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
         logger.debug(f"Loaded config: {config}")
         return config
 
@@ -337,28 +176,9 @@ class ServiceConfig(Config):
             cls.service_config = ServiceConfig.get_from_dict(raw_dict=loaded_config)
         return cls.service_config
 
-<<<<<<< HEAD
-    def get_project_to_sync(self, dg_repo_name, dg_branch) -> Optional[ProjectToSync]:
-        # TODO: Is it ok that we don't check namespace? Can't this be misused from a fork?
-        projects = [
-            project
-            for project in self.projects_to_sync
-            if project.dg_repo_name == dg_repo_name and project.dg_branch == dg_branch
-        ]
-        if projects:
-            logger.info(f"Found project to sync: {projects[0]}.")
-            return projects[0]
-        return None
-
-=======
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
     def get_github_account_name(self) -> str:
         return {
             Deployment.prod: "packit-as-a-service[bot]",
             Deployment.stg: "packit-as-a-service-stg[bot]",
             Deployment.dev: "packit-as-a-service-dev[bot]",
-<<<<<<< HEAD
-        }.get(self.deployment)
-=======
         }.get(self.deployment, "packit-as-a-service[bot]")
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)

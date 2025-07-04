@@ -2,10 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import logging
-<<<<<<< HEAD
-=======
 import logging.handlers
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
 from os import getenv
 from socket import gaierror
 
@@ -104,16 +101,8 @@ Talisman(
     },
 )
 
-<<<<<<< HEAD
-# Make Prometheus Client serve the /metrics endpoint
-application = DispatcherMiddleware(packit_as_a_service, {"/metrics": prometheus_app()})
-
-# With the code below, you can debug ALL requests coming to flask
-@application.before_request
-=======
 # With the code below, you can debug ALL requests coming to flask
 @packit_as_a_service.before_request
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
 def log_request():
     from flask import request, url_for
     import logging
@@ -123,8 +112,6 @@ def log_request():
         "api.doc",
         _external=True,  # _external = generate a URL with FQDN, not a relative one
     ))
-<<<<<<< HEAD
-=======
 
 # Make Prometheus Client serve the /metrics endpoint
 application = DispatcherMiddleware(packit_as_a_service, {"/metrics": prometheus_app()})
@@ -132,4 +119,3 @@ application = DispatcherMiddleware(packit_as_a_service, {"/metrics": prometheus_
 if __name__ == "__main__":
     # For development: run the Flask app directly, not the DispatcherMiddleware
     get_flask_application().run(host="0.0.0.0", port=8080, debug=True)
->>>>>>> adbe9d6 (models.py refractor; WIP; wouldn't run)
