@@ -1,0 +1,40 @@
+# Copyright Contributors to the Packit project.
+# SPDX-License-Identifier: MIT
+
+---
+- name: This is a recipe for how to cook with packit-service worker
+  hosts: all
+  vars:
+    home_path: "{{ lookup('env', 'HOME') }}"
+    packit_service_path: /src
+  tasks:
+    - import_tasks: tasks/common.yaml
+    - name: Create /tmp/sandcastle
+      # working dir for the upstream git which is mapped to the sandbox pod
+      ansible.builtin.file:
+        state: directory
+        path: /tmp/sandcastle
+        mode: 0777
+    - name: Copy gitconfig
+      ansible.builtin.copy:
+        src: gitconfig
+        dest: "{{ home_path }}/.gitconfig"
+    - name: Copy run_worker_simplified.sh
+      ansible.builtin.copy:
+        src: run_worker_simplified.sh
+        dest: /usr/bin/run_worker_simplified.sh
+        mode: 0777
+    - name: Install scripts
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: /usr/bin/
+        mode: 0777
+      with_fileglob:
+        - "{{ playbook_dir }}/scripts/*.py"
+    - name: Make sure allowlist.py is present
+      ansible.builtin.file:
+        state: file
+        path: "{{ item }}"
+      loop:
+        - /usr/bin/allowlist.py
+        - /usr/bin/db-cleanup.py
