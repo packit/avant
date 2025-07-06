@@ -429,8 +429,7 @@ class GitProjectModel(Base):
     project_url = Column(String)
     instance_url = Column(String, nullable=False)
 
-    # we checked that exists at least a bodhi update or a koji build
-    # or a merged packit downstream pull request for it.
+    # we checked that exists at least a merged packit downstream pull request for it.
     onboarded_downstream = Column(Boolean, default=False)
 
     def __init__(self, *args, **kwargs):
@@ -987,8 +986,7 @@ class GitProjectModel(Base):
     ) -> set["GitProjectModel"]:
         """
         List already known onboarded projects.
-        An onboarded project is a project with a bodhi update or a koji build
-        or a merged downstream packit pull request.
+        An onboarded project is a project with a merged downstream packit pull request.
 
         We already checked them.
         """
@@ -1436,8 +1434,7 @@ class PipelineModel(Base):
     Represents one pipeline.
 
     Connects ProjectEventModel (and project events like PullRequestModel via that model) with
-    build/test models like  SRPMBuildModel, CoprBuildTargetModel, KojiBuildTargetModel,
-    and TFTTestRunGroupModel.
+    build/test models like  SRPMBuildModel, CoprBuildTargetModel, and VMImageBuildTargetModel.
 
     * One model of each build/test target/group model can be connected.
     * Each build/test model can be connected to multiple PipelineModels (e.g. on retrigger).
@@ -2130,14 +2127,12 @@ class AllowlistModel(Base):
     id = Column(Integer, primary_key=True)
     namespace = Column(String, index=True)  # renamed from account_name
     status = Column(Enum(AllowlistStatus))
-    fas_account = Column(String)
 
     @classmethod
     def add_namespace(
         cls,
         namespace: str,
         status: str,
-        fas_account: Optional[str] = None,
     ):
         """
         Adds namespace with specific status to the allowlist. If namespace is present,
@@ -2147,10 +2142,6 @@ class AllowlistModel(Base):
             namespace (str): Namespace to be added. Can be `github.com/namespace`
                 or specific repository `github.com/namespace/repository.git`.
             status (str): Status to be set. AllowlistStatus enumeration as string.
-            fas_account (Optional[str]): FAS login, in case the namespace was automatically
-                approved through the FAS login of user that installed GitHub App.
-
-                Defaults to `None`.
 
         Returns:
             Newly created entry or entry that represents requested namespace.
@@ -2162,8 +2153,6 @@ class AllowlistModel(Base):
                 namespace_entry.namespace = namespace
 
             namespace_entry.status = status
-            if fas_account:
-                namespace_entry.fas_account = fas_account
 
             session.add(namespace_entry)
             return namespace_entry
@@ -2215,14 +2204,12 @@ class AllowlistModel(Base):
         return {
             "namespace": self.namespace,
             "status": self.status,
-            "fas_account": self.fas_account,
         }
 
     def __repr__(self):
         return (
             f'<AllowlistModel(namespace="{self.namespace}", '
-            f'status="{self.status}", '
-            f'fas_account="{self.fas_account}")>'
+            f'status="{self.status}")>'
         )
 
 
@@ -2745,12 +2732,6 @@ def get_usage_data(datetime_from=None, datetime_to=None, top=10) -> dict:
           https://github.com/osbuild/osbuild: 38186
           https://github.com/osbuild/osbuild-composer: 106786
           https://github.com/systemd/systemd: 60158
-      koji_build_targets:
-        job_runs: 1466
-        top_projects_by_job_runs:
-          https://github.com/containers/podman: 297
-          https://github.com/packit/ogr: 509
-          https://github.com/rear/rear: 267
       srpm_builds:
         job_runs: 103695
         top_projects_by_job_runs:
@@ -2763,12 +2744,6 @@ def get_usage_data(datetime_from=None, datetime_to=None, top=10) -> dict:
           https://github.com/martinpitt/python-dbusmock: 38
           https://github.com/packit/packit: 38
           https://github.com/rhinstaller/anaconda: 34
-      tft_test_run_targets:
-        job_runs: 150525
-        top_projects_by_job_runs:
-          https://github.com/cockpit-project/cockpit: 21157
-          https://github.com/oamg/convert2rhel: 15506
-          https://github.com/teemtee/tmt: 22136
       vm_image_build_targets:
         job_runs: 2
         top_projects_by_job_runs:
@@ -2845,7 +2820,7 @@ def get_usage_data(datetime_from=None, datetime_to=None, top=10) -> dict:
 def get_onboarded_projects() -> tuple[dict[int, str], dict[int, str]]:
     """Returns a tuple with two dictionaries of project IDs and URLs:
     onboarded projects: projects which have a
-      merged downstream PR, a Koji build or a Bodhi update
+      merged downstream PR
     almost onboarded projects: projects with
       a downstream PR created but not yet merged
     """
@@ -2854,8 +2829,6 @@ def get_onboarded_projects() -> tuple[dict[int, str], dict[int, str]]:
     # find **downstream git projects** with a PR created by Packit
     # if there exist a downstream Packit PR we are not sure it has been
     # merged, the project is *almost onboarded* until the PR is merged
-    # (unless we already know it has a koji build or bodhi update, then
-    # we don't need to check for a merged PR - it obviously has one)
     # do not re-check projects we already checked and we know they
     # have a merged Packit PR
 

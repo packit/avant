@@ -18,7 +18,6 @@ from packit_service.models import (
     GitBranchModel,
     ProjectEventModel,
     ProjectReleaseModel,
-    TestingFarmResult,
 )
 from packit_service.service.db_project_events import (
     AddIssueEventToDb,
@@ -117,20 +116,6 @@ class PullRequest(AddPullRequestEventToDb, CommentEvent):
                 or None
             )
         return self._build_targets_override
-
-    @property
-    def tests_targets_override(self) -> Optional[set[tuple[str, str]]]:
-        if not self._tests_targets_override and "retest-failed" in self.comment:
-            self._tests_targets_override = (
-                super().get_all_tf_targets_by_status(
-                    statuses_to_filter_with=[
-                        TestingFarmResult.failed,
-                        TestingFarmResult.error,
-                    ],
-                )
-                or None
-            )
-        return self._tests_targets_override
 
     def get_dict(self, default_dict: Optional[dict] = None) -> dict:
         result = super().get_dict()

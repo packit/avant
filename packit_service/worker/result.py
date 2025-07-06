@@ -33,7 +33,7 @@ class TaskResults(dict):
         success: bool,
         msg: str,
         event: Event,
-        job_config: JobConfig = None,
+        job_config: Optional[JobConfig] = None,
     ):
         package_config = (
             event.packages_config.get_package_config_for(job_config)

@@ -45,20 +45,17 @@ class MRTargetSchema(Schema):
 class ServiceConfigSchema(UserConfigSchema):
     deployment = DeploymentField(required=True)
     webhook_secret = fields.String()
-    fas_password = fields.String(default="")
     validate_webhooks = fields.Bool(default=False)
     admins = fields.List(fields.String())
     server_name = fields.String()
     gitlab_token_secret = fields.String()
     gitlab_mr_targets_handled = fields.List(fields.Nested(MRTargetSchema), missing=None)
     enabled_private_namespaces = fields.List(fields.String())
-    dashboard_url = fields.String()
     enabled_projects_for_srpm_in_copr = fields.List(fields.String())
     comment_command_prefix = fields.String()
     package_config_path_override = fields.String()
     command_handler_storage_class = fields.String(missing="gp2")
     appcode = fields.String()
-    enabled_projects_for_fedora_ci = fields.List(fields.String())
 
     @post_load
     def make_instance(self, data, **kwargs):

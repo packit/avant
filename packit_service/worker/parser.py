@@ -7,31 +7,20 @@ Parser is transforming github JSONs into `events` objects
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from os import getenv
-from typing import Any, Callable, ClassVar, Optional, Union
+from typing import Callable, ClassVar, Optional, Union
 
 from ogr.parsing import RepoUrl, parse_git_repo
 from packit.config import JobConfigTriggerType
-from packit.constants import DISTGIT_INSTANCES
 from packit.utils import nested_get
 
 from packit_service.config import Deployment, ServiceConfig
-from packit_service.constants import (
-    TESTING_FARM_INSTALLABILITY_TEST_URL,
-    KojiBuildState,
-    KojiTaskState,
-)
 from packit_service.events import (
     abstract,
-    anitya,
     copr,
     github,
     gitlab,
-    koji,
     openscanhub,
     pagure,
-    testing_farm,
     vm_image,
 )
 from packit_service.events.enums import (
@@ -46,9 +35,7 @@ from packit_service.models import (
     PullRequestModel,
 )
 from packit_service.worker.handlers.abstract import MAP_CHECK_PREFIX_TO_HANDLER
-from packit_service.worker.helpers.build import CoprBuildJobHelper, KojiBuildJobHelper
-from packit_service.worker.helpers.testing_farm import TestingFarmClient
-
+from packit_service.worker.helpers.build import CoprBuildJobHelper
 logger = logging.getLogger(__name__)
 
 
@@ -90,8 +77,6 @@ class Parser:
     ) -> Optional[
         Union[
             abstract.comment.Commit,
-            anitya.NewHotness,
-            anitya.VersionUpdate,
             copr.CoprBuild,
             github.check.Commit,
             github.check.PullRequest,
@@ -109,16 +94,12 @@ class Parser:
             gitlab.push.Commit,
             gitlab.push.Tag,
             gitlab.release.Release,
-            koji.result.Build,
-            koji.tag.Build,
-            koji.result.Task,
             openscanhub.task.Finished,
             openscanhub.task.Started,
             pagure.pr.Comment,
             pagure.pr.Flag,
             pagure.pr.Action,
             pagure.push.Commit,
-            testing_farm.Result,
             vm_image.Result,
         ]
     ]:
@@ -150,21 +131,15 @@ class Parser:
                 Parser.parse_installation_event,
                 Parser.parse_copr_event,
                 Parser.parse_mr_event,
-                Parser.parse_koji_task_event,
-                Parser.parse_koji_build_event,
-                Parser.parse_koji_build_tag_event,
                 Parser.parse_merge_request_comment_event,
                 Parser.parse_gitlab_issue_comment_event,
                 Parser.parse_gitlab_commit_comment_event,
                 Parser.parse_gitlab_push_event,
                 Parser.parse_pipeline_event,
-                Parser.parse_pagure_push_event,
                 Parser.parse_pagure_pr_flag_event,
                 Parser.parse_pagure_pull_request_comment_event,
-                Parser.parse_new_hotness_update_event,
                 Parser.parse_gitlab_release_event,
                 Parser.parse_gitlab_tag_push_event,
-                Parser.parse_anitya_version_update_event,
                 Parser.parse_openscanhub_task_finished_event,
                 Parser.parse_openscanhub_task_started_event,
                 Parser.parse_commit_comment_event,
@@ -961,7 +936,6 @@ class Parser:
             build_test_job_names = (
                 CoprBuildJobHelper.status_name_build,
                 CoprBuildJobHelper.status_name_test,
-                KojiBuildJobHelper.status_name_build,
             )
             if (
                 check_name_job in build_test_job_names
@@ -1185,50 +1159,6 @@ class Parser:
         return github.release.Release(repo_namespace, repo_name, release_ref, https_url)
 
     @staticmethod
-    def parse_pagure_push_event(event) -> Optional[pagure.push.Commit]:
-        """this corresponds to dist-git event when someone pushes new commits"""
-        topic = event.get("topic")
-        if topic != "org.fedoraproject.prod.pagure.git.receive":
-            return None
-
-        logger.info(f"Dist-git commit event, topic: {topic}")
-
-        dg_repo_namespace = nested_get(event, "repo", "namespace")
-        dg_repo_name = nested_get(event, "repo", "name")
-
-        if not (dg_repo_namespace and dg_repo_name):
-            logger.warning("No full name of the repository.")
-            return None
-
-        dg_branch = nested_get(event, "branch")
-        dg_commit = nested_get(event, "end_commit")
-        if not (dg_branch and dg_commit):
-            logger.warning("Target branch/rev for the new commits is not set.")
-            return None
-
-        username = nested_get(event, "agent")
-
-        logger.info(
-            f"New commits added to dist-git repo {dg_repo_namespace}/{dg_repo_name},"
-            f"rev: {dg_commit}, branch: {dg_branch}",
-        )
-
-        dg_base_url = getenv("DISTGIT_URL", DISTGIT_INSTANCES["fedpkg"].url)
-        dg_project_url = f"{dg_base_url}{dg_repo_namespace}/{dg_repo_name}"
-
-        dg_pr_id = nested_get(event, "pull_request_id")
-
-        return pagure.push.Commit(
-            repo_namespace=dg_repo_namespace,
-            repo_name=dg_repo_name,
-            git_ref=dg_branch,
-            project_url=dg_project_url,
-            commit_sha=dg_commit,
-            committer=username,
-            pr_id=dg_pr_id,
-        )
-
-    @staticmethod
     def parse_copr_event(event) -> Optional[copr.CoprBuild]:
         """this corresponds to copr build event e.g:"""
         topic = event.get("topic")
@@ -1261,147 +1191,6 @@ class Parser:
             project_name,
             pkg,
             timestamp,
-        )
-
-    @staticmethod
-    def parse_koji_task_event(event) -> Optional[koji.result.Task]:
-        if event.get("topic") != "org.fedoraproject.prod.buildsys.task.state.change":
-            return None
-
-        task_id = event.get("id")
-        logger.info(f"Koji task event: task ID={task_id}")
-
-        state = nested_get(event, "info", "state")
-
-        if not state:
-            logger.debug("Cannot find build state.")
-            return None
-
-        state_enum = KojiTaskState(event.get("new")) if "new" in event else None
-        old_state = KojiTaskState(event.get("old")) if "old" in event else None
-
-        start_time = nested_get(event, "info", "start_time")
-        completion_time = nested_get(event, "info", "completion_time")
-
-        rpm_build_task_ids = {}
-        for children in nested_get(event, "info", "children", default=[]):
-            if children.get("method") == "buildArch":
-                rpm_build_task_ids[children.get("arch")] = children.get("id")
-
-        return koji.result.Task(
-            task_id=task_id,
-            state=state_enum,
-            old_state=old_state,
-            start_time=start_time,
-            completion_time=completion_time,
-            rpm_build_task_ids=rpm_build_task_ids,
-        )
-
-    @staticmethod
-    def parse_koji_build_event(event) -> Optional[koji.result.Build]:
-        if event.get("topic") != "org.fedoraproject.prod.buildsys.build.state.change":
-            return None
-
-        build_id = event.get("build_id")
-        task_id = event.get("task_id")
-        owner = event.get("owner")
-        logger.info(f"Koji event: build_id={build_id} task_id={task_id} owner={owner}")
-
-        new_state = (
-            KojiBuildState.from_number(raw_new)
-            if (raw_new := event.get("new")) is not None
-            else None
-        )
-        if new_state == KojiBuildState.deleted:
-            logger.debug("We are not interested in deleted builds.")
-            return None
-
-        old_state = (
-            KojiBuildState.from_number(raw_old)
-            if (raw_old := event.get("old")) is not None
-            else None
-        )
-
-        start_time = event.get("creation_time")
-        completion_time = event.get("completion_time")
-
-        version = event.get("version")
-        epoch = event.get("epoch")
-
-        # "release": "1.fc36"
-        release = event.get("release")
-
-        # "request": [
-        #       "git+https://src.fedoraproject.org/rpms/packit.git#0eb3e12005cb18f15d3054020f7ac934c01eae08",
-        #       "rawhide",
-        #       {}
-        #     ],
-        raw_git_ref, fedora_target, _ = event.get("request")
-        project_url = raw_git_ref.split("#")[0].removeprefix("git+").removesuffix(".git")
-        package_name, commit_hash = raw_git_ref.split("/")[-1].split(".git#")
-        branch_name = fedora_target.removesuffix("-candidate")
-
-        rpm_build_task_ids = {}
-        for children in nested_get(event, "task", "children", default=[]):
-            if children.get("method") == "buildArch":
-                rpm_build_task_ids[children.get("arch")] = children.get("id")
-
-        return koji.result.Build(
-            build_id=build_id,
-            rpm_build_task_ids=rpm_build_task_ids,
-            state=new_state,
-            package_name=package_name,
-            branch_name=branch_name,
-            commit_sha=commit_hash,
-            namespace="rmps",
-            repo_name=package_name,
-            project_url=project_url,
-            epoch=epoch,
-            version=version,
-            release=release,
-            task_id=task_id,
-            web_url=koji.result.Build.get_koji_rpm_build_web_url(
-                rpm_build_task_id=task_id,
-                koji_web_url=ServiceConfig.get_service_config().koji_web_url,
-            ),
-            old_state=old_state,
-            start_time=start_time,
-            completion_time=completion_time,
-            owner=owner,
-        )
-
-    @staticmethod
-    def parse_koji_build_tag_event(event) -> Optional[koji.tag.Build]:
-        if event.get("topic") != "org.fedoraproject.prod.buildsys.tag":
-            return None
-
-        build_id = event.get("build_id")
-        tag_name = event.get("tag")
-        tag_id = event.get("tag_id")
-        owner = event.get("owner")
-
-        logger.info(
-            f"Koji build tag event: build_id={build_id} tag={tag_name} owner={owner}",
-        )
-
-        package_name = event.get("name")
-        epoch = event.get("epoch")
-        version = event.get("version")
-        release = event.get("release")
-
-        dg_base_url = getenv("DISTGIT_URL", DISTGIT_INSTANCES["fedpkg"].url)
-        distgit_project_url = f"{dg_base_url}rpms/{package_name}"
-
-        return koji.tag.Build(
-            build_id=build_id,
-            tag_name=tag_name,
-            tag_id=tag_id,
-            project_url=distgit_project_url,
-            package_name=package_name,
-            epoch=epoch,
-            version=version,
-            release=release,
-            owner=owner,
         )
 
     @staticmethod
@@ -1583,79 +1372,6 @@ class Parser:
         )
 
     @staticmethod
-    def parse_new_hotness_update_event(event) -> Optional[anitya.NewHotness]:
-        if "hotness.update.bug.file" not in event.get("topic", ""):
-            return None
-
-        # "package" should contain the Fedora package name directly
-        # see https://github.com/fedora-infra/the-new-hotness/blob/
-        # 363acd33623dadd5fc3b60a83a528926c7c21fc1/hotness/hotness_consumer.py#L385
-        # and https://github.com/fedora-infra/the-new-hotness/blob/
-        # 363acd33623dadd5fc3b60a83a528926c7c21fc1/hotness/hotness_consumer.py#L444-L455
-        #
-        # we could get it also like this:
-        # [package["package_name"]
-        #   for package in event["trigger"]["msg"]["message"]["packages"]
-        #   if package["distro"] == "Fedora"][0]
-        package_name = event.get("package")
-        dg_base_url = getenv("DISTGIT_URL", DISTGIT_INSTANCES["fedpkg"].url)
-
-        distgit_project_url = f"{dg_base_url}rpms/{package_name}"
-
-        version = nested_get(event, "trigger", "msg", "project", "version")
-
-        bug_id = nested_get(event, "bug", "bug_id")
-        anitya_project_id = nested_get(event, "trigger", "msg", "project", "id")
-        anitya_project_name = nested_get(event, "trigger", "msg", "project", "name")
-
-        logger.info(
-            f"New hotness update event for package: {package_name}, version: {version},"
-            f" bug ID: {bug_id}",
-        )
-
-        return anitya.NewHotness(
-            package_name=package_name,
-            version=version,
-            distgit_project_url=distgit_project_url,
-            bug_id=bug_id,
-            anitya_project_id=anitya_project_id,
-            anitya_project_name=anitya_project_name,
-        )
-
-    @staticmethod
-    def parse_anitya_version_update_event(event) -> Optional[anitya.VersionUpdate]:
-        if "anitya.project.version.update.v2" not in event.get("topic", ""):
-            return None
-
-        # FIXME: Handle Fedora too in case we want to support multiple releases
-        # such as for Go.
-        package_name = next(
-            package["package_name"]
-            for package in event["message"]["packages"]
-            if package["distro"] == "CentOS"
-        )
-        distgit_project_url = DISTGIT_INSTANCES["centpkg"].distgit_project_url(
-            package_name,
-        )
-
-        # ‹upstream_versions› contain the new releases
-        versions = nested_get(event, "message", "upstream_versions")
-
-        anitya_project_id = nested_get(event, "message", "project", "id")
-        anitya_project_name = nested_get(event, "message", "project", "name")
-
-        logger.info(
-            f"Anitya version update event for package: {package_name}, versions: {versions}",
-        )
-        return anitya.VersionUpdate(
-            package_name=package_name,
-            versions=versions,
-            distgit_project_url=distgit_project_url,
-            anitya_project_id=anitya_project_id,
-            anitya_project_name=anitya_project_name,
-        )
-
-    @staticmethod
     def parse_openscanhub_task_finished_event(
         event,
     ) -> Optional[openscanhub.task.Finished]:
@@ -1730,24 +1446,13 @@ class Parser:
             "pagure.pull-request.new": parse_pagure_pull_request_event.__func__,  # type: ignore
             "pagure.pull-request.updated": parse_pagure_pull_request_event.__func__,  # type: ignore
             "pagure.pull-request.rebased": parse_pagure_pull_request_event.__func__,  # type: ignore
-            "pagure.git.receive": parse_pagure_push_event.__func__,  # type: ignore
             "copr.build.start": parse_copr_event.__func__,  # type: ignore
             "copr.build.end": parse_copr_event.__func__,  # type: ignore
-            "buildsys.task.state.change": parse_koji_task_event.__func__,  # type: ignore
-            "buildsys.build.state.change": parse_koji_build_event.__func__,  # type: ignore
-            "buildsys.tag": parse_koji_build_tag_event.__func__,  # type: ignore
-            "hotness.update.bug.file": parse_new_hotness_update_event.__func__,  # type: ignore
-            "org.release-monitoring.prod.anitya.project.version.update.v2": (
-                parse_anitya_version_update_event.__func__  # type: ignore
-            ),
             "openscanhub.task.started": (
                 parse_openscanhub_task_started_event.__func__  # type: ignore
             ),
             "openscanhub.task.finished": (
                 parse_openscanhub_task_finished_event.__func__  # type: ignore
             ),
-        },
-        "testing-farm": {
-            "results": parse_testing_farm_results_event.__func__,  # type: ignore
         },
     }

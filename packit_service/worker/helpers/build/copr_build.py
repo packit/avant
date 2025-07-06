@@ -51,7 +51,6 @@ from packit_service.models import (
     ProjectEventModel,
     ProjectEventModelType,
     SRPMBuildModel,
-    TFTTestRunTargetModel,
 )
 from packit_service.service.urls import (
     get_copr_build_info_url,
@@ -1021,7 +1020,7 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
     # it clashes the type checking…
     def get_running_jobs(
         self,
-    ) -> Union[Iterable[tuple["CoprBuildTargetModel"]], Iterable[tuple["TFTTestRunTargetModel"]]]:
+    ) -> Iterable[tuple["CoprBuildTargetModel"]]:
         if sha := self.metadata.commit_sha_before:
             yield from CoprBuildGroupModel.get_running(commit_sha=sha)
 

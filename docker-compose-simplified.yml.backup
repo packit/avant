@@ -17,11 +17,6 @@ services:
       POSTGRESQL_DATABASE: packit
     ports:
       - 5432:5432
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U packit -d packit"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     deploy:
       resources:
         limits:
@@ -50,11 +45,10 @@ services:
       POSTGRESQL_HOST: postgres
       POSTGRESQL_DATABASE: packit
       CELERY_RETRY_LIMIT: 0
-      PACKIT_SERVICE_CONFIG: /secrets/packit-service.yaml
       #SQLALCHEMY_ECHO: 1
     volumes:
       - ./packit_service:/usr/local/lib/python3.13/site-packages/packit_service:ro,z
-      - ./secrets/packit/dev:/secrets:ro,z
+      - ./secrets/packit/dev/packit-service.yaml:/home/packit/.config/packit-service.yaml:ro,z
     user: "1024"
 
   service:
@@ -67,10 +61,8 @@ services:
     image: quay.io/packit/packit-service:dev
     command: bash -c "alembic-3 upgrade head && cd /usr/share/packit && python3 -m packit_service.service.app"
     depends_on:
-      redis:
-        condition: service_started
-      postgres:
-        condition: service_healthy
+      - redis
+      - postgres
     ports:
       - 8080:8080
     environment:
@@ -81,12 +73,11 @@ services:
       POSTGRESQL_HOST: postgres
       POSTGRESQL_DATABASE: packit
       HTTP_PORT: 8080
-      PACKIT_SERVICE_CONFIG: /secrets/packit-service.yaml
       #SQLALCHEMY_ECHO: 1
     volumes:
       - ./packit_service:/src/packit_service:ro,z
       - ./alembic:/src/alembic:rw,z
-      - ./secrets/packit/dev:/secrets:ro,z
+      - ./secrets/packit/dev/packit-service.yaml:/home/packit/.config/packit-service.yaml:ro,z
     user: "1024"
 
   beat:
@@ -111,10 +102,9 @@ services:
       POSTGRESQL_HOST: postgres
       POSTGRESQL_DATABASE: packit
       CELERY_RETRY_LIMIT: 0
-      PACKIT_SERVICE_CONFIG: /secrets/packit-service.yaml
     volumes:
       - ./packit_service:/usr/local/lib/python3.13/site-packages/packit_service:ro,z
-      - ./secrets/packit/dev:/secrets:ro,z
+      - ./secrets/packit/dev/packit-service.yaml:/home/packit/.config/packit-service.yaml:ro,z
     user: "1024"
 
   adminer:

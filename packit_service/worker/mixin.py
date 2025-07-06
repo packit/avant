@@ -7,19 +7,12 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Optional, Protocol, Union
 
-from fasjson_client import Client
-from fasjson_client.errors import APIError
 from ogr.abstract import GitProject, Issue, PullRequest
 from packit.api import PackitAPI
 from packit.local_project import CALCULATE, LocalProject, LocalProjectBuilder
 from packit.utils.repo import RepositoryCache
 
 from packit_service.config import ServiceConfig
-from packit_service.constants import (
-    FASJSON_URL,
-    SANDCASTLE_DG_REPO_DIR,
-    SANDCASTLE_LOCAL_PROJECT_DIR,
-)
 from packit_service.events.event_data import EventData
 from packit_service.worker.helpers.job_helper import BaseJobHelper
 from packit_service.worker.reporting import BaseCommitStatus
@@ -126,51 +119,6 @@ class PackitAPIProtocol(Config):
     def clean_api(self) -> None: ...
 
 
-class PackitAPIWithDownstreamProtocol(PackitAPIProtocol):
-    _packit_api: Optional[PackitAPI] = None
-
-    @abstractmethod
-    def is_packager(self, user) -> bool:
-        """Check that the given FAS user
-        is a packager
-
-        Args:
-            user (str) FAS user account name
-        Returns:
-            true if a packager false otherwise
-        """
-        ...
-
-
-class PackitAPIWithDownstreamMixin(PackitAPIWithDownstreamProtocol):
-    _packit_api: Optional[PackitAPI] = None
-
-    @property
-    def packit_api(self):
-        if not self._packit_api:
-            self._packit_api = PackitAPI(
-                self.service_config,
-                self.job_config,
-                downstream_local_project=self.local_project,
-            )
-        return self._packit_api
-
-    def is_packager(self, user):
-        self.packit_api.init_kerberos_ticket()
-        client = Client(FASJSON_URL)
-        try:
-            groups = client.list_user_groups(username=user)
-        except APIError:
-            logger.debug(f"Unable to get groups for user {user}.")
-            return False
-        return "packager" in [group["groupname"] for group in groups.result]
-
-    def clean_api(self) -> None:
-        """TODO: probably we should clean something even here
-        but for now let it do the same as before the refactoring
-        """
-
-
 class PackitAPIWithUpstreamMixin(PackitAPIProtocol):
     _packit_api: Optional[PackitAPI] = None
 
@@ -181,8 +129,6 @@ class PackitAPIWithUpstreamMixin(PackitAPIProtocol):
                 self.service_config,
                 self.job_config,
                 upstream_local_project=self.local_project,
-                dist_git_clone_path=Path(self.service_config.command_handler_work_dir)
-                / SANDCASTLE_DG_REPO_DIR,
                 non_git_upstream=self.non_git_upstream,
             )
         return self._packit_api
@@ -226,7 +172,7 @@ class LocalProjectMixin(Config):
                 ),
             )
             working_dir = Path(
-                Path(self.service_config.command_handler_work_dir) / SANDCASTLE_LOCAL_PROJECT_DIR,
+                Path(self.service_config.command_handler_work_dir) / "local_project",
             )
             kwargs = {
                 "repo_name": CALCULATE,
@@ -339,7 +285,7 @@ class GetReporter(Protocol):
 
 
 class GetReporterFromJobHelperMixin(Config):
-    _job_helper: BaseJobHelper = None
+    _job_helper: Optional[BaseJobHelper] = None
 
     @property
     def job_helper(self):

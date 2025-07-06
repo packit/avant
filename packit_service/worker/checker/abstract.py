@@ -11,13 +11,12 @@ from packit.config.package_config import PackageConfig
 from packit_service.events.event_data import EventData
 from packit_service.worker.mixin import (
     ConfigFromEventMixin,
-    PackitAPIWithDownstreamMixin,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class Checker(ConfigFromEventMixin, PackitAPIWithDownstreamMixin):
+class Checker(ConfigFromEventMixin):
     def __init__(
         self,
         package_config: PackageConfig,

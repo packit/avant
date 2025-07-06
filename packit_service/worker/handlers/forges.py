@@ -35,7 +35,7 @@ from packit_service.worker.handlers.abstract import (
 from packit_service.worker.mixin import (
     ConfigFromEventMixin,
     GetIssueMixin,
-    PackitAPIWithDownstreamMixin,
+    PackitAPIWithUpstreamMixin,
 )
 from packit_service.worker.reporting import create_issue_if_needed
 from packit_service.worker.result import TaskResults
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 class GithubAppInstallationHandler(
     JobHandler,
     ConfigFromEventMixin,
-    PackitAPIWithDownstreamMixin,
+    PackitAPIWithUpstreamMixin,
 ):
     task_name = TaskName.installation
 
@@ -158,7 +158,7 @@ class GithubAppInstallationHandler(
 @reacts_to(event=github.issue.Comment)
 class GithubFasVerificationHandler(
     JobHandler,
-    PackitAPIWithDownstreamMixin,
+    PackitAPIWithUpstreamMixin,
     GetIssueMixin,
 ):
     task_name = TaskName.github_fas_verification

@@ -40,7 +40,7 @@ from packit_service.worker.handlers.mixin import (
     GetVMImageBuilderMixin,
 )
 from packit_service.worker.mixin import (
-    PackitAPIWithDownstreamMixin,
+    PackitAPIWithUpstreamMixin,
 )
 from packit_service.worker.result import TaskResults
 
@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 @reacts_to(gitlab.mr.Comment)
 class VMImageBuildHandler(
     RetriableJobHandler,
-    PackitAPIWithDownstreamMixin,
+    PackitAPIWithUpstreamMixin,
     GetVMImageBuilderMixin,
     GetVMImageBuildReporterFromJobHelperMixin,
 ):
@@ -123,7 +123,7 @@ class VMImageBuildHandler(
 @reacts_to(vm_image.Result)
 class VMImageBuildResultHandler(
     JobHandler,
-    PackitAPIWithDownstreamMixin,
+    PackitAPIWithUpstreamMixin,
     GetVMImageBuilderMixin,
     GetVMImageBuildReporterFromJobHelperMixin,
 ):

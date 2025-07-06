@@ -10,7 +10,6 @@ from typing import Any
 
 import celery
 import copr.v3
-import requests
 from celery.canvas import Signature
 from copr.v3 import Client as CoprClient
 from requests import HTTPError
@@ -22,11 +21,9 @@ from packit_service.constants import (
     COPR_SRPM_CHROOT,
     COPR_SUCC_STATE,
     DEFAULT_JOB_TIMEOUT,
-    TESTING_FARM_API_URL,
 )
 from packit_service.events import copr as copr_events
 from packit_service.events import (
-    testing_farm,
     vm_image,
 )
 from packit_service.events.enums import FedmsgTopic
@@ -34,8 +31,6 @@ from packit_service.models import (
     BuildStatus,
     CoprBuildTargetModel,
     SRPMBuildModel,
-    TestingFarmResult,
-    TFTTestRunTargetModel,
     VMImageBuildStatus,
     VMImageBuildTargetModel,
 )
@@ -43,7 +38,6 @@ from packit_service.utils import elapsed_seconds
 from packit_service.worker.handlers import (
     CoprBuildEndHandler,
     CoprBuildStartHandler,
-    TestingFarmResultsHandler,
     VMImageBuildResultHandler,
 )
 from packit_service.worker.handlers.copr import AbstractCoprBuildReportHandler
@@ -60,102 +54,6 @@ def celery_run_async(signatures: list[Signature]) -> None:
     # https://docs.celeryq.dev/en/stable/userguide/canvas.html#groups
     celery.group(signatures).apply_async()
     logger.debug("Signatures were sent to Celery.")
-
-
-def check_pending_testing_farm_runs() -> None:
-    """Checks the status of pending TFT runs and updates it if needed."""
-    logger.info("Getting pending TFT runs from DB")
-    current_time = datetime.now(timezone.utc)
-    not_completed = (
-        TestingFarmResult.new,
-        TestingFarmResult.queued,
-        TestingFarmResult.running,
-        TestingFarmResult.cancel_requested,
-    )
-    pending_test_runs = TFTTestRunTargetModel.get_all_by_status(*not_completed)
-    for run in pending_test_runs:
-        logger.debug(f"Checking status of TF pipeline {run.pipeline_id}")
-        # .submitted_time can be None, we'll set it later
-        if run.submitted_time:
-            elapsed = elapsed_seconds(begin=run.submitted_time, end=current_time)
-            if elapsed > DEFAULT_JOB_TIMEOUT:
-                logger.info(
-                    f"TF pipeline {run.pipeline_id} has been running for "
-                    f"{elapsed}s, probably an internal error occurred. "
-                    "Not checking it anymore.",
-                )
-                run.set_status(TestingFarmResult.error)
-                continue
-        run_url = f"{TESTING_FARM_API_URL}requests/{run.pipeline_id}"
-        response = requests.get(run_url)
-        if not response.ok:
-            logger.info(
-                f"Failed to obtain state of TF pipeline {run.pipeline_id}. "
-                f"Status code {response.status_code}. Reason: {response.reason}. "
-                "Let's try again later.",
-            )
-            continue
-
-        details = response.json()
-        data = Parser.parse_data_from_testing_farm(run, details)
-
-        logger.debug(f"Result for the TF pipeline {run.pipeline_id} is {data.result}.")
-        if data.result in not_completed:
-            logger.debug("Skip updating a pipeline which is not yet completed.")
-            continue
-        event = testing_farm.Result(
-            pipeline_id=details["id"],
-            result=data.result,
-            compose=data.compose,
-            summary=data.summary,
-            log_url=data.log_url,
-            copr_build_id=data.copr_build_id,
-            copr_chroot=data.copr_chroot,
-            commit_sha=data.ref,
-            project_url=data.project_url,
-            created=data.created,
-            identifier=data.identifier,
-        )
-        try:
-            update_testing_farm_run(event, run)
-        except Exception as ex:
-            logger.debug(
-                f"There was an exception when updating the Testing farm run "
-                f"with pipeline ID {run.pipeline_id}: {ex}",
-            )
-
-
-def update_testing_farm_run(event: testing_farm.Result, run: TFTTestRunTargetModel):
-    """
-    Updates the state of the Testing Farm run.
-    """
-    packages_config = event.get_packages_config()
-    if not packages_config:
-        logger.info(f"No config found for {run.pipeline_id}. Skipping.")
-        return
-
-    job_configs = SteveJobs(event).get_config_for_handler_kls(
-        handler_kls=TestingFarmResultsHandler,
-    )
-
-    event_dict = event.get_dict()
-    signatures = []
-    for job_config in job_configs:
-        package_config = (
-            event.packages_config.get_package_config_for(job_config)
-            if event.packages_config
-            else None
-        )
-        handler = TestingFarmResultsHandler(
-            package_config=package_config,
-            job_config=job_config,
-            event=event_dict,
-        )
-        # check for identifiers equality
-        if handler.pre_check(package_config, job_config, event_dict):
-            signatures.append(handler.get_signature(event=event, job=job_config))
-
-    celery_run_async(signatures=signatures)
 
 
 def check_pending_copr_builds() -> None:

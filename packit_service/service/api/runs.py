@@ -47,11 +47,6 @@ def process_runs(runs):
             "merged_run_id": pipeline.merged_id,
             "srpm": None,
             "copr": [],
-            "koji": [],
-            "test_run": [],
-            "propose_downstream": [],
-            "pull_from_upstream": [],
-            "bodhi_update": [],
             "vm_image_build": [],
         }
 
@@ -148,8 +143,5 @@ class Run(Resource):
             ),
             "srpm_build_id": run.srpm_build_id,
             "copr_build_group_id": run.copr_build_group_id,
-            "koji_build_group_id": run.koji_build_group_id,
-            "test_run_group_id": run.test_run_group_id,
-            "bodhi_update_group_id": run.bodhi_update_group_id,
         }
         return response_maker(result)

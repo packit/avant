@@ -73,16 +73,17 @@ class OpenScanHubHelper:
         srpm_model: SRPMBuildModel,
     ) -> Optional[tuple[Path, Path]]:
         def download_srpm(srpm_model: SRPMBuildModel) -> Optional[Path]:
-            if not srpm_model.url:
+            url = srpm_model.url
+            if url is None:
                 logger.info(
                     f"SRPMBuildModel with copr_build_id={srpm_model.copr_build_id} "
                     "has status={srpm_model.status} "
                     "and empty url. Skipping download."
                 )
                 return None
-            srpm_path = Path(directory).joinpath(basename(srpm_model.url))
-            if not download_file(srpm_model.url, srpm_path):
-                logger.info(f"Downloading of SRPM {srpm_model.url} was not successful.")
+            srpm_path = Path(directory).joinpath(basename(str(url)))
+            if not download_file(str(url), srpm_path):
+                logger.info(f"Downloading of SRPM {url} was not successful.")
                 return None
             return srpm_path
 
@@ -121,6 +122,17 @@ class CoprOpenScanHubHelper(OpenScanHubHelper):
         srpm_model = self.build.get_srpm_build()
 
         with tempfile.TemporaryDirectory() as directory:
+            if not srpm_model:
+                self.report(
+                    state=BaseCommitStatus.neutral,
+                    description=(
+                        "It was not possible to download the SRPMs needed"
+                        " for the differential scan."
+                    ),
+                    url="",
+                )
+                return
+                
             if not (paths := self.download_srpms(directory, base_srpm_model, srpm_model)):
                 self.report(
                     state=BaseCommitStatus.neutral,
@@ -128,7 +140,7 @@ class CoprOpenScanHubHelper(OpenScanHubHelper):
                         "It was not possible to download the SRPMs needed"
                         " for the differential scan."
                     ),
-                    url=None,
+                    url="",
                 )
                 return
 
@@ -172,7 +184,7 @@ class CoprOpenScanHubHelper(OpenScanHubHelper):
                             "Scan in OpenScanHub submitted successfully. "
                             "Check the URL for more details."
                         ),
-                        url=get_openscanhub_info_url(scan.id),
+                        url=get_openscanhub_info_url(int(scan.id)),
                         links_to_external_services={"OpenScanHub task": url},
                     )
             except IntegrityError as ex:

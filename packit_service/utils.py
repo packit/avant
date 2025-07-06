@@ -48,7 +48,7 @@ class only_once:
 # wrappers for dumping/loading of configs
 def load_package_config(package_config: dict):
     package_config_obj = PackageConfigSchema().load(package_config) if package_config else None
-    return PackageConfig.post_load(package_config_obj)
+    return PackageConfig.post_load(package_config_obj) if package_config_obj else None
 
 
 def dump_package_config(package_config: PackageConfig):

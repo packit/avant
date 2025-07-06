@@ -6,48 +6,37 @@ from collections.abc import Iterable
 from typing import Any, Callable, Optional, Union
 from urllib.parse import urlparse
 
-from fasjson_client import Client
-from fasjson_client.errors import APIError
 from ogr.abstract import GitProject
-from packit.api import PackitAPI
-from packit.config.job_config import JobConfig, JobType
-from packit.exceptions import PackitCommandFailedError, PackitException
+from packit.config.job_config import JobConfig
+from packit.exceptions import PackitException
 
 from packit_service.config import ServiceConfig
 from packit_service.constants import (
     DENIED_MSG,
     DOCS_APPROVAL_URL,
-    FASJSON_URL,
     NAMESPACE_NOT_ALLOWED_MARKDOWN_DESCRIPTION,
     NAMESPACE_NOT_ALLOWED_MARKDOWN_ISSUE_INSTRUCTIONS,
     NOTIFICATION_REPO,
 )
 from packit_service.events import (
     abstract,
-    anitya,
     copr,
     github,
     gitlab,
-    koji,
     openscanhub,
     pagure,
-    testing_farm,
 )
 from packit_service.events.event_data import EventData
 from packit_service.models import AllowlistModel, AllowlistStatus
 from packit_service.worker.helpers.build import CoprBuildJobHelper
-from packit_service.worker.helpers.testing_farm import TestingFarmJobHelper
 from packit_service.worker.reporting import BaseCommitStatus
 
 logger = logging.getLogger(__name__)
 
 UncheckedEvent = Union[
-    anitya.NewHotness,
     copr.CoprBuild,
     github.check.Rerun,
     github.installation.Installation,
-    koji.result.Task,
-    koji.result.Build,
     pagure.pr.Comment,
     pagure.pr.Action,
     pagure.push.Commit,
@@ -73,70 +62,6 @@ class Allowlist:
         if not url:
             return None
         return url.split("://")[1] + ".git"
-
-    def init_kerberos_ticket(self):
-        """
-        Try to init kerberos ticket.
-
-        Returns:
-            Whether the initialisation was successful.
-        """
-        try:
-            logger.debug("Initialising Kerberos ticket so that we can use fasjson API.")
-            PackitAPI(
-                config=self.service_config,
-                package_config=None,
-            ).init_kerberos_ticket()
-        except PackitCommandFailedError as ex:
-            msg = f"Kerberos authentication error: {ex.stderr_output}"
-            logger.error(msg)
-            return False
-
-        return True
-
-    def is_github_username_from_fas_account_matching(self, fas_account, sender_login):
-        """
-        Compares the Github username from the FAS account
-        to the username of the one who triggered the installation.
-
-        Args:
-            fas_account: FAS account for which we will get the account info.
-            sender_login: Login of the user that will be checked for be match
-                            against info from FAS.
-
-        Returns:
-            True if there was a match found. False if we were not able to run kinit or
-            the check for match was not successful.
-        """
-        if not self.init_kerberos_ticket():
-            return False
-
-        logger.info(
-            f"Going to check match for Github username from FAS account {fas_account} and"
-            f" Github account {sender_login}.",
-        )
-        client = Client(FASJSON_URL)
-        try:
-            user_info = client.get_user(username=fas_account).result
-        # e.g. User not found
-        except APIError as e:
-            logger.debug(f"We were not able to get the user: {e}")
-            return False
-
-        is_private = user_info.get("is_private")
-        if is_private:
-            logger.debug("The account is private.")
-            return False
-
-        github_username = user_info.get("github_username")
-        if github_username:
-            logger.debug(
-                f"github_username from FAS account {fas_account}: {github_username}",
-            )
-            return github_username == sender_login
-
-        logger.debug("github_username not set.")
-        return False
 
     @staticmethod
     def approve_namespace(namespace: str):
@@ -228,7 +153,7 @@ class Allowlist:
     @staticmethod
     def is_denied(namespace: str) -> bool:
         model = AllowlistModel.get_namespace(namespace)
-        return bool(model) and model.status == AllowlistStatus.denied
+        return bool(model and model.status == AllowlistStatus.denied)
 
     @staticmethod
     def remove_namespace(namespace: str) -> bool:
@@ -253,7 +178,7 @@ class Allowlist:
 
     @staticmethod
     def get_namespaces_by_status(status: AllowlistStatus) -> list[str]:
-        return [account.namespace for account in AllowlistModel.get_by_status(status.value)]
+        return [str(account.namespace) for account in AllowlistModel.get_by_status(status.value)]
 
     @staticmethod
     def waiting_namespaces() -> list[str]:
@@ -295,19 +220,21 @@ class Allowlist:
         project_url = self._strip_protocol_and_add_git(event.project_url)
         if not project_url:
             raise KeyError(f"Failed to get namespace from {type(event)!r}")
-        if self.is_namespace_or_parent_denied(project_url):
+        if project_url and self.is_namespace_or_parent_denied(project_url):
             msg = f"{project_url} or parent namespaces denied!"
-            project.commit_comment(event.commit_sha, msg)
+            if event.commit_sha:
+                project.commit_comment(event.commit_sha, msg)
             return False
 
-        if self.is_namespace_or_parent_approved(project_url):
+        if project_url and self.is_namespace_or_parent_approved(project_url):
             return True
 
         msg = (
             f"Project {project_url} is not on our allowlist! "
             "See https://packit.dev/docs/guide/#2-approval"
         )
-        project.commit_comment(event.commit_sha, msg)
+        if event.commit_sha:
+            project.commit_comment(event.commit_sha, msg)
         return False
 
     def _check_pr_event(
@@ -379,11 +306,8 @@ class Allowlist:
         short_msg,
     ):
         for job_config in job_configs:
-            job_helper_kls: type[Union[TestingFarmJobHelper, CoprBuildJobHelper]]
-            if job_config.type == JobType.tests:
-                job_helper_kls = TestingFarmJobHelper
-            else:
-                job_helper_kls = CoprBuildJobHelper
+            job_helper_kls: type[CoprBuildJobHelper]
+            job_helper_kls = CoprBuildJobHelper
 
             job_helper = job_helper_kls(
                 service_config=self.service_config,
@@ -398,7 +322,7 @@ class Allowlist:
                 tests_targets_override=event.tests_targets_override,
             )
             if user_or_project_denied:
-                url = None
+                url = ""
                 markdown_content = DENIED_MSG
             else:
                 issue_url = self.get_approval_issue(namespace=project.namespace)
@@ -502,13 +426,8 @@ class Allowlist:
                 pagure.pr.Action,
                 pagure.pr.Comment,
                 copr.CoprBuild,
-                testing_farm.Result,
                 github.installation.Installation,
-                koji.result.Task,
-                koji.result.Build,
-                koji.tag.Build,
                 github.check.Rerun,
-                anitya.NewHotness,
                 openscanhub.task.Started,
                 openscanhub.task.Finished,
             ): self._check_unchecked_event,

@@ -12,7 +12,6 @@ from packit_service.models import (
     AbstractProjectObjectDbType,
     CoprBuildTargetModel,
     ProjectEventModel,
-    TFTTestRunTargetModel,
     filter_most_recent_target_names_by_status,
 )
 from packit_service.package_config_getter import PackageConfigGetter
@@ -103,28 +102,6 @@ class ForgeIndependent(Event):
             pr_id=self.pr_id,
             fail_when_missing=self.fail_when_config_file_missing,
         )
-
-    def get_all_tf_targets_by_status(
-        self,
-        statuses_to_filter_with: list[str],
-    ) -> Optional[set[tuple[str, str]]]:
-        if self.commit_sha is None:
-            return None
-
-        logger.debug(
-            f"Getting Testing Farm targets for commit sha {self.commit_sha} "
-            f"and statuses {statuses_to_filter_with}",
-        )
-        found_targets = filter_most_recent_target_names_by_status(
-            models=TFTTestRunTargetModel.get_all_by_commit_target(
-                commit_sha=self.commit_sha,
-            ),
-            statuses_to_filter_with=statuses_to_filter_with,
-        )
-        logger.debug(
-            f"Testing Farm found targets {found_targets}",
-        )
-        return found_targets
 
     def get_all_build_targets_by_status(
         self,

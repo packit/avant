@@ -64,7 +64,7 @@ from packit_service.worker.handlers.mixin import (
     GetCoprBuildJobHelperMixin,
 )
 from packit_service.worker.helpers.open_scan_hub import CoprOpenScanHubHelper
-from packit_service.worker.mixin import PackitAPIWithDownstreamMixin
+from packit_service.worker.mixin import PackitAPIWithUpstreamMixin
 from packit_service.worker.reporting import BaseCommitStatus, DuplicateCheckMode
 from packit_service.worker.result import TaskResults
 
@@ -89,7 +89,7 @@ logger = logging.getLogger(__name__)
 class CoprBuildHandler(
     RetriableJobHandler,
     ConfigFromEventMixin,
-    PackitAPIWithDownstreamMixin,
+    PackitAPIWithUpstreamMixin,
     GetCoprBuildJobHelperMixin,
 ):
     task_name = TaskName.copr_build
@@ -130,7 +130,7 @@ class CoprBuildHandler(
 
 class AbstractCoprBuildReportHandler(
     JobHandler,
-    PackitAPIWithDownstreamMixin,
+    PackitAPIWithUpstreamMixin,
     GetCoprBuildJobHelperForIdMixin,
     GetCoprBuildEventMixin,
 ):

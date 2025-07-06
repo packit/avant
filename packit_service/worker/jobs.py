@@ -25,9 +25,7 @@ from packit_service.constants import (
 from packit_service.events import (
     abstract,
     github,
-    koji,
     pagure,
-    testing_farm,
 )
 from packit_service.events.event import Event
 from packit_service.events.event_data import EventData
@@ -42,39 +40,20 @@ from packit_service.worker.handlers import (
     CoprBuildHandler,
     GithubAppInstallationHandler,
     GithubFasVerificationHandler,
-    KojiBuildHandler,
 )
 from packit_service.worker.handlers.abstract import (
     MAP_CHECK_PREFIX_TO_HANDLER,
     MAP_COMMENT_TO_HANDLER,
-    MAP_COMMENT_TO_HANDLER_FEDORA_CI,
     MAP_JOB_TYPE_TO_HANDLER,
     MAP_REQUIRED_JOB_TYPE_TO_HANDLER,
     SUPPORTED_EVENTS_FOR_HANDLER,
-    SUPPORTED_EVENTS_FOR_HANDLER_FEDORA_CI,
-    FedoraCIJobHandler,
     JobHandler,
-)
-from packit_service.worker.handlers.bodhi import (
-    BodhiUpdateHandler,
-    RetriggerBodhiUpdateHandler,
-)
-from packit_service.worker.handlers.distgit import (
-    DownstreamKojiBuildHandler,
-    PullFromUpstreamHandler,
-    RetriggerDownstreamKojiBuildHandler,
-    TagIntoSidetagHandler,
 )
 from packit_service.worker.helpers.build import (
     BaseBuildJobHelper,
     CoprBuildJobHelper,
-    KojiBuildJobHelper,
 )
-from packit_service.worker.helpers.fedora_ci import FedoraCIHelper
-from packit_service.worker.helpers.sync_release.propose_downstream import (
-    ProposeDownstreamJobHelper,
-)
-from packit_service.worker.helpers.testing_farm import TestingFarmJobHelper
+
 from packit_service.worker.monitoring import Pushgateway
 from packit_service.worker.parser import Parser
 from packit_service.worker.reporting import BaseCommitStatus
@@ -108,38 +87,6 @@ def get_handlers_for_comment(
     if not handlers:
         logger.debug(f"Command {commands[0]} not supported by packit.")
     return handlers
-
-
-def get_handlers_for_comment_fedora_ci(
-    comment: str,
-    packit_comment_command_prefix: str,
-) -> set[type[FedoraCIJobHandler]]:
-    """
-    Get handlers for the given Fedora CI command respecting packit_comment_command_prefix.
-
-    Args:
-        comment: comment we are reacting to
-        packit_comment_command_prefix: `/packit-ci` for prod or `/packit-ci-stg` for stg
-
-    Returns:
-        Set of handlers that are triggered by a comment.
-    """
-    # TODO: remove this once Fedora CI has its own instances and comment_command_prefixes
-    # comment_command_prefixes for Fedora CI are /packit-ci and /packit-ci-stg
-    if packit_comment_command_prefix.endswith("-stg"):
-        packit_comment_command_prefix = "/packit-ci-stg"
-    else:
-        packit_comment_command_prefix = "/packit-ci"
-
-    commands = get_packit_commands_from_comment(comment, packit_comment_command_prefix)
-    if not commands:
-        return set()
-
-    handlers = MAP_COMMENT_TO_HANDLER_FEDORA_CI[commands[0]]
-    if not handlers:
-        logger.debug(f"Command {commands[0]} not supported by packit.")
-    return handlers
-
 
 def get_handlers_for_check_rerun(check_name_job: str) -> set[type[JobHandler]]:
     """
@@ -263,21 +210,8 @@ class SteveJobs:
             # should we comment about not processing if the comment is not
             # on the issue created by us or not in packit/notifications?
         else:
-            if (
-                isinstance(
-                    self.event,
-                    (pagure.pr.Action, pagure.pr.Comment, koji.result.Task, testing_farm.Result),
-                )
-                and self.event.db_project_object
-                and (url := self.event.db_project_object.project.project_url)
-                and url in self.service_config.enabled_projects_for_fedora_ci
-            ):
-                # try to process Fedora CI jobs first
-                processing_results = self.process_fedora_ci_jobs()
-
-            if not processing_results:
-                # processing the jobs from the config
-                processing_results = self.process_jobs()
+            # processing the jobs from the config
+            processing_results = self.process_jobs()
 
         if processing_results is None:
             processing_results = [
@@ -295,7 +229,7 @@ class SteveJobs:
         self,
         handler_kls: type[JobHandler],
         job_config: JobConfig,
-    ) -> Union[ProposeDownstreamJobHelper, BaseBuildJobHelper]:
+    ) -> Union[BaseBuildJobHelper]:
         """
         Initialize job helper with arguments
         based on what type of handler is used.
@@ -320,19 +254,10 @@ class SteveJobs:
             "job_config": job_config,
         }
 
-        if handler_kls == ProposeDownstreamHandler:
-            propose_downstream_helper = ProposeDownstreamJobHelper
-            params["branches_override"] = self.event.branches_override
-            return propose_downstream_helper(**params)
+        helper_kls: type[Union[CoprBuildJobHelper]]
 
-        helper_kls: type[Union[TestingFarmJobHelper, CoprBuildJobHelper, KojiBuildJobHelper]]
-
-        if handler_kls == TestingFarmHandler:
-            helper_kls = TestingFarmJobHelper
-        elif handler_kls == CoprBuildHandler:
+        if handler_kls == CoprBuildHandler:
             helper_kls = CoprBuildJobHelper
-        else:
-            helper_kls = KojiBuildJobHelper
 
         params.update(
             {
@@ -360,20 +285,8 @@ class SteveJobs:
                 status has been updated.
         """
         number_of_build_targets = None
-        if isinstance(self.event, abstract.comment.CommentEvent) and handler_kls in (
-            PullFromUpstreamHandler,
-            DownstreamKojiBuildHandler,
-            BodhiUpdateHandler,
-            RetriggerBodhiUpdateHandler,
-            RetriggerDownstreamKojiBuildHandler,
-            TagIntoSidetagHandler,
-        ):
-            self.report_task_accepted_for_downstream_retrigger_comments(handler_kls)
         if handler_kls not in (
             CoprBuildHandler,
-            KojiBuildHandler,
-            TestingFarmHandler,
-            ProposeDownstreamHandler,
         ):
             # no reporting, no metrics
             return
@@ -391,39 +304,6 @@ class SteveJobs:
         )
 
         self.push_copr_metrics(handler_kls, number_of_build_targets)
-
-    def report_task_accepted_for_fedora_ci(self, handler_kls: type[FedoraCIJobHandler]):
-        """
-        For CI-related dist-git PR comment events report the initial status
-        "Task was accepted" to inform user we are working on the request.
-        """
-
-        if not isinstance(
-            self.event,
-            abstract.comment.PullRequest,
-        ):
-            logger.debug(
-                "Not a comment event, not reporting task was accepted via commit status.",
-            )
-            return
-
-        metadata = EventData.from_event_dict(self.event.get_dict())
-
-        helper = FedoraCIHelper(
-            project=self.event.project,
-            metadata=metadata,
-            target_branch=self.event.pull_request_object.target_branch,
-        )
-
-        for check_name in handler_kls.get_check_names(
-            self.service_config, self.event.project, metadata
-        ):
-            helper.report(
-                description=TASK_ACCEPTED,
-                state=BaseCommitStatus.pending,
-                url="",
-                check_name=check_name,
-            )
 
     def search_distgit_config_in_issue(self) -> Optional[tuple[str, PackageConfig]]:
         """Get a tuple (dist-git repo url, package config loaded from dist-git yaml file).
@@ -468,98 +348,13 @@ class SteveJobs:
         Returns:
             Whether the Packit configuration is present in the repo.
         """
-        if isinstance(self.event, abstract.comment.CommentEvent) and (
-            handlers := get_handlers_for_comment(
-                self.event.comment,
-                packit_comment_command_prefix=self.service_config.comment_command_prefix,
-            )
-        ):
+
+        # TODO
             # we require packit config file when event is triggered by /packit command
             # but not when it is triggered through an issue in the issues repository
-            dist_git_package_config = None
-            if (
-                isinstance(self.event, abstract.comment.Issue)
-                # for propose-downstream we want to load the package config
-                # from upstream repo
-                and ProposeDownstreamHandler not in handlers
-                and (dist_git_package_config := self.search_distgit_config_in_issue())
-            ):
-                (
-                    self.event.dist_git_project_url,
-                    self.event._package_config,
-                ) = dist_git_package_config
-                return True
-
-            if not dist_git_package_config:
-                self.event.fail_when_config_file_missing = True
-
         # False happens when service receives events for repos which don't have packit config
         # success=True - it's not an error that people don't have packit.yaml in their repo
         return self.event.packages_config
-
-    def process_fedora_ci_jobs(self) -> list[TaskResults]:
-        """
-        Create Celery tasks for a job handler (if the trigger matches) for Fedora CI.
-
-        Returns:
-            A list of task results for each task created.
-        """
-        handlers_triggered_by_job = None
-
-        if isinstance(self.event, abstract.comment.CommentEvent):
-            handlers_triggered_by_job = get_handlers_for_comment_fedora_ci(
-                self.event.comment,
-                self.service_config.comment_command_prefix,
-            )
-
-        matching_handlers = {
-            handler
-            for handler, supported_events in SUPPORTED_EVENTS_FOR_HANDLER_FEDORA_CI.items()
-            if isinstance(self.event, tuple(supported_events))
-            and (handlers_triggered_by_job is None or handler in handlers_triggered_by_job)
-        }
-
-        if not matching_handlers:
-            logger.debug(f"No handler found for event {self.event} for Fedora CI.")
-            return []
-
-        # TODO: add allowlist checks here
-
-        processing_results: list[TaskResults] = []
-
-        for handler_kls in matching_handlers:
-            if not handler_kls.pre_check(
-                package_config=None,
-                job_config=None,
-                event=self.event.get_dict(),
-            ):
-                continue
-
-            self.report_task_accepted_for_fedora_ci(handler_kls)
-
-            celery_signature = celery.signature(
-                handler_kls.task_name.value,
-                kwargs={
-                    "package_config": None,
-                    "job_config": None,
-                    "event": self.event.get_dict(),
-                },
-            )
-
-            celery_signature.apply_async()
-            logger.debug(f"Celery signature sent for handler {handler_kls}.")
-
-            processing_results.append(
-                TaskResults(
-                    success=True,
-                    details={
-                        "msg": "Job created.",
-                        "event": self.event.get_dict(),
-                    },
-                )
-            )
-
-        return processing_results
 
     def process_jobs(self) -> list[TaskResults]:
         """
@@ -664,8 +459,6 @@ class SteveJobs:
                 )
                 if handler_kls in (
                     CoprBuildHandler,
-                    TestingFarmHandler,
-                    KojiBuildHandler,
                 ):
                     self.event.store_packages_config()
 
@@ -774,34 +567,10 @@ class SteveJobs:
             bd.pop("trigger")
             return ad == bd
 
-        def event_is_koji_tag_command():
-            commands = get_packit_commands_from_comment(
-                self.event.comment, self.service_config.comment_command_prefix
-            )
-            if not commands:
-                return False
-            return commands[0] == "koji-tag"
-
         matching_jobs: list[JobConfig] = []
         if isinstance(self.event, pagure.pr.Comment):
             for job in self.event.packages_config.get_job_views():
                 if (
-                    job.type in [JobType.koji_build, JobType.bodhi_update]
-                    and job.trigger
-                    in (JobConfigTriggerType.commit, JobConfigTriggerType.koji_build)
-                    and self.event.job_config_trigger_type == JobConfigTriggerType.pull_request
-                ):
-                    if job.type == JobType.koji_build:
-                        # avoid having duplicate koji_build jobs
-                        if any(j for j in matching_jobs if compare_jobs_without_triggers(job, j)):
-                            continue
-                        # in case of koji-tag command, match only koji_build jobs with sidetag group
-                        if event_is_koji_tag_command() and not job.sidetag_group:
-                            continue
-                    # A koji_build or bodhi_update job with commit or koji_build trigger
-                    # can be re-triggered by a Pagure comment in a PR
-                    matching_jobs.append(job)
-                elif (
                     job.type == JobType.pull_from_upstream
                     and job.trigger == JobConfigTriggerType.release
                     and self.event.job_config_trigger_type == JobConfigTriggerType.pull_request
@@ -809,39 +578,6 @@ class SteveJobs:
                     # A pull_from_upstream job with release trigger
                     # can be re-triggered by a comment in a dist-git PR
                     matching_jobs.append(job)
-        elif isinstance(self.event, abstract.comment.Issue):
-            for job in self.event.packages_config.get_job_views():
-                if (
-                    job.type in (JobType.koji_build, JobType.bodhi_update)
-                    and job.trigger
-                    in (JobConfigTriggerType.commit, JobConfigTriggerType.koji_build)
-                    and self.event.job_config_trigger_type == JobConfigTriggerType.release
-                ):
-                    # avoid having duplicate koji_build jobs
-                    if job.type == JobType.koji_build and any(
-                        j for j in matching_jobs if compare_jobs_without_triggers(job, j)
-                    ):
-                        continue
-                    # A koji_build/bodhi_update can be re-triggered by a
-                    # comment in a issue in the repository issues
-                    # after a failed release event
-                    # (which has created the issue)
-                    matching_jobs.append(job)
-        elif isinstance(self.event, koji.tag.Build):
-            # create a virtual job config
-            job_config = JobConfig(
-                JobType.koji_build_tag,
-                JobConfigTriggerType.koji_build,
-                self.event.packages_config.packages,
-            )
-            for package, config in self.event.packages_config.packages.items():
-                if config.downstream_package_name == self.event.package_name:
-                    job = JobConfigView(job_config, package)
-                    matching_jobs.append(job)
-                    # if there are multiple packages with the same downstream_package_name,
-                    # choose any of them (the handler should ignore the config anyway)
-                    break
-
         return matching_jobs
 
     def get_jobs_matching_event(self) -> list[JobConfig]:

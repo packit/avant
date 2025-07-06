@@ -16,7 +16,6 @@ from packit.config import JobConfigTriggerType, PackageConfig
 
 from packit_service.models import (
     AbstractProjectObjectDbType,
-    AnityaProjectModel,
     ProjectEventModel,
 )
 
@@ -143,7 +142,6 @@ class Event(ABC):
             self.db_project_object.project.project_url
             if (
                 self.db_project_object
-                and not isinstance(self.db_project_object.project, AnityaProjectModel)
             )
             else None
         )

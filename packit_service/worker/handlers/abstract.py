@@ -47,11 +47,7 @@ MAP_REQUIRED_JOB_TYPE_TO_HANDLER: dict[JobType, set[type["JobHandler"]]] = defau
     set,
 )
 SUPPORTED_EVENTS_FOR_HANDLER: dict[type["JobHandler"], set[type["Event"]]] = defaultdict(set)
-SUPPORTED_EVENTS_FOR_HANDLER_FEDORA_CI: dict[type["FedoraCIJobHandler"], set[type["Event"]]] = (
-    defaultdict(set)
-)
 MAP_COMMENT_TO_HANDLER: dict[str, set[type["JobHandler"]]] = defaultdict(set)
-MAP_COMMENT_TO_HANDLER_FEDORA_CI: dict[str, set[type["FedoraCIJobHandler"]]] = defaultdict(set)
 MAP_CHECK_PREFIX_TO_HANDLER: dict[str, set[type["JobHandler"]]] = defaultdict(set)
 
 
@@ -110,31 +106,6 @@ def reacts_to(event: type["Event"]):
 
     return _add_to_mapping
 
-
-def reacts_to_as_fedora_ci(event: type["Event"]):
-    """
-    [class decorator]
-    Specify an event for which we want to use this handler as a Fedora CI.
-    Matching is done via `isinstance` so you can use some abstract class as well.
-
-    Multiple decorators are allowed.
-
-    Example:
-    ```
-    @reacts_to(ReleaseEvent)
-    @reacts_to(PullRequestGithubEvent)
-    @reacts_to(PushGitHubEvent)
-    class CoprBuildHandler(JobHandler):
-    ```
-    """
-
-    def _add_to_mapping(kls: type["FedoraCIJobHandler"]):
-        SUPPORTED_EVENTS_FOR_HANDLER_FEDORA_CI[kls].add(event)
-        return kls
-
-    return _add_to_mapping
-
-
 def run_for_comment(command: str):
     """
     [class decorator]
@@ -162,32 +133,6 @@ def run_for_comment(command: str):
 
     return _add_to_mapping
 
-
-def run_for_comment_as_fedora_ci(command: str):
-    """
-    [class decorator]
-    Specify a command for which we want to run a handler as a Fedora CI.
-    e.g. for `/packit-ci command` we need to add `command`
-
-    Multiple decorators are allowed.
-
-    Don't forget to specify valid comment events
-    using @reacts_to_as_fedora_ci decorator.
-
-    Example:
-    ```
-    @run_for_comment(command="scratch-build")
-    @reacts_to_as_fedora_ci(event=pagure.pr.Action)
-    @reacts_to_as_fedora_ci(event=pagure.pr.Comment)
-    class DownstreamKojiScratchBuildHandler(
-    ```
-    """
-
-    def _add_to_mapping(kls: type["FedoraCIJobHandler"]):
-        MAP_COMMENT_TO_HANDLER_FEDORA_CI[command].add(kls)
-        return kls
-
-    return _add_to_mapping
 
 
 def run_for_check_rerun(prefix: str):
@@ -222,34 +167,13 @@ class TaskName(str, enum.Enum):
     copr_build_end = "task.run_copr_build_end_handler"
     copr_build = "task.run_copr_build_handler"
     installation = "task.run_installation_handler"
-    testing_farm = "task.run_testing_farm_handler"
-    testing_farm_results = "task.run_testing_farm_results_handler"
-    downstream_testing_farm = "task.run_downstream_testing_farm_handler"
-    downstream_testing_farm_results = "task.run_downstream_testing_farm_results_handler"
-    propose_downstream = "task.run_propose_downstream_handler"
-    upstream_koji_build = "task.run_koji_build_handler"
-    upstream_koji_build_report = "task.run_koji_build_report_handler"
-    downstream_koji_build = "task.run_downstream_koji_build_handler"
-    retrigger_downstream_koji_build = "task.run_retrigger_downstream_koji_build_handler"
-    downstream_koji_build_report = "task.run_downstream_koji_build_report_handler"
     # Fedora notification is ok for now
     # downstream_koji_build_report = "task.run_downstream_koji_build_report_handler"
-    sync_from_downstream = "task.run_sync_from_downstream_handler"
-    bodhi_update = "task.bodhi_update"
-    bodhi_update_from_sidetag = "task.bodhi_update_from_sidetag"
-    retrigger_bodhi_update = "task.retrigger_bodhi_update"
-    issue_comment_retrigger_bodhi_update = "task.issue_comment_retrigger_bodhi_update"
     github_fas_verification = "task.github_fas_verification"
     vm_image_build = "task.run_vm_image_build_handler"
     vm_image_build_result = "task.run_vm_image_build_result_handler"
-    pull_from_upstream = "task.pull_from_upstream"
-    check_onboarded_projects = "task.check_onboarded_projects"
-    koji_build_tag = "task.koji_build_tag"
-    tag_into_sidetag = "task.tag_into_sidetag"
     openscanhub_task_finished = "task.openscanhub_task_finished"
     openscanhub_task_started = "task.openscanhub_task_started"
-    downstream_koji_scratch_build = "task.run_downstream_koji_scratch_build_handler"
-    downstream_koji_scratch_build_report = "task.run_downstream_koji_scratch_build_report_handler"
 
 
 class Handler(PackitAPIProtocol, Config):
@@ -467,13 +391,3 @@ class RetriableJobHandler(JobHandler):
 
     def run(self) -> TaskResults:
         raise NotImplementedError("This should have been implemented.")
-
-
-class FedoraCIJobHandler(JobHandler):
-    check_name: str = ""
-
-    @classmethod
-    def get_check_names(
-        cls, service_config: ServiceConfig, project: GitProject, metadata: EventData
-    ) -> list[str]:
-        return [cls.check_name] if cls.check_name else []

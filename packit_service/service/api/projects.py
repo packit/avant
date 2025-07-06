@@ -171,7 +171,6 @@ class ProjectsPRs(Resource):
             pr_info = {
                 "pr_id": pr.pr_id,
                 "builds": [],
-                "koji_builds": [],
                 "srpm_builds": [],
                 "tests": [],
             }
@@ -185,15 +184,6 @@ class ProjectsPRs(Resource):
                 }
                 pr_info["builds"].append(build_info)
 
-            for build in pr.get_koji_builds():
-                build_info = {
-                    "task_id": build.task_id,
-                    "chroot": build.target,
-                    "status": build.status,
-                    "web_url": build.web_url,
-                }
-                pr_info["koji_builds"].append(build_info)
-
             for build in pr.get_srpm_builds():
                 build_info = {
                     "srpm_build_id": build.id,
@@ -201,15 +191,6 @@ class ProjectsPRs(Resource):
                     "log_url": get_srpm_build_info_url(build.id),
                 }
                 pr_info["srpm_builds"].append(build_info)
-
-            for test_run in pr.get_test_runs():
-                test_info = {
-                    "pipeline_id": test_run.pipeline_id,
-                    "chroot": test_run.target,
-                    "status": str(test_run.status),
-                    "web_url": test_run.web_url,
-                }
-                pr_info["tests"].append(test_info)
 
             result.append(pr_info)
 
@@ -318,7 +299,6 @@ class ProjectBranches(Resource):
             branch_info = {
                 "branch": branch.name,
                 "builds": [],
-                "koji_builds": [],
                 "srpm_builds": [],
                 "tests": [],
             }
@@ -332,15 +312,6 @@ class ProjectBranches(Resource):
                 }
                 branch_info["builds"].append(build_info)
 
-            for build in branch.get_koji_builds():
-                build_info = {
-                    "task_id": build.task_id,
-                    "chroot": build.target,
-                    "status": build.status,
-                    "web_url": build.web_url,
-                }
-                branch_info["koji_builds"].append(build_info)
-
             for build in branch.get_srpm_builds():
                 build_info = {
                     "srpm_build_id": build.id,
@@ -348,15 +319,6 @@ class ProjectBranches(Resource):
                     "log_url": get_srpm_build_info_url(build.id),
                 }
                 branch_info["srpm_builds"].append(build_info)
-
-            for test_run in branch.get_test_runs():
-                test_info = {
-                    "pipeline_id": test_run.pipeline_id,
-                    "chroot": test_run.target,
-                    "status": test_run.status,
-                    "web_url": test_run.web_url,
-                }
-                branch_info["tests"].append(test_info)
             result.append(branch_info)
 
         resp = response_maker(
