@@ -119,7 +119,7 @@ class CoprBuildGroup(Resource):
     @ns.response(HTTPStatus.OK, "OK, copr build group details follow")
     @ns.response(
         HTTPStatus.NOT_FOUND.value,
-        "No info about koji build group stored in DB",
+        "No info about build group stored in DB",
     )
     def get(self, id):
         """A specific test run details."""
@@ -127,7 +127,7 @@ class CoprBuildGroup(Resource):
 
         if not group_model:
             return response_maker(
-                {"error": "No info about group stored in DB"},
+                {"error": "No info about build group stored in DB"},
                 status=HTTPStatus.NOT_FOUND,
             )
 

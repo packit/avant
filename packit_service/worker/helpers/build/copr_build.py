@@ -34,9 +34,6 @@ from packit_service.constants import (
     COPR_CHROOT_CHANGE_MSG,
     CUSTOM_COPR_PROJECT_NOT_ALLOWED_CONTENT,
     CUSTOM_COPR_PROJECT_NOT_ALLOWED_STATUS,
-    DASHBOARD_JOBS_TESTING_FARM_PATH,
-    DEFAULT_MAPPING_INTERNAL_TF,
-    DEFAULT_MAPPING_TF,
     DEFAULT_RETRY_LIMIT_OUTAGE,
     GIT_FORGE_PROJECT_NOT_ALLOWED_TO_BUILD_IN_COPR,
     MISSING_PERMISSIONS_TO_BUILD_IN_COPR,
@@ -332,12 +329,7 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
         if configured_distros:
             distro_arch_list = [(distro, arch) for distro in configured_distros]
         else:
-            mapping = (
-                DEFAULT_MAPPING_INTERNAL_TF
-                if test_job_config.use_internal_tf
-                else DEFAULT_MAPPING_TF
-            )
-            distro = mapping.get(distro, distro)
+            # Testing Farm integration removed - no mapping needed
             distro_arch_list = [(distro, arch)]
 
         return {f"{distro}-{arch}" for (distro, arch) in distro_arch_list}
@@ -498,7 +490,7 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
         if isinstance(self.project, GitlabProject):
             build_description = test_description = "Job is in progress..."
             url_for_build = web_url
-            url_for_tests = f"{self.service_config.dashboard_url}{DASHBOARD_JOBS_TESTING_FARM_PATH}"
+            url_for_tests = web_url  # Testing Farm integration removed
         else:
             build_description = "SRPM build in Copr was submitted..."
             test_description = "Waiting for RPMs to be built..."

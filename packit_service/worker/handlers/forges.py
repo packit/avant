@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """
-This file defines classes for job handlers specific for Github hooks
-TODO: The build and test handlers are independent and should be moved away.
+This file defines classes for job handlers specific for GitHub hooks
 """
 
 import logging

@@ -5,19 +5,15 @@ from enum import Enum
 
 CONTACTS_URL = "https://packit.dev/#contact"
 DOCS_URL = "https://packit.dev/docs"
-DOCS_CONFIGURATION_URL = f"{DOCS_URL}/configuration"
-DOCS_FAQ_URL = f"{DOCS_URL}/faq"
-DOCS_HOW_TO_RETRIGGER_URL = (
-    f"{DOCS_URL}/guide/#how-to-re-trigger-packit-actions-in-your-pull-request"
-)
-DOCS_HOW_TO_CONFIGURE_URL = f"{DOCS_URL}/guide/#3-configuration"
-DOCS_APPROVAL_URL = f"{DOCS_URL}/guide/#2-approval"
-DOCS_VM_IMAGE_BUILD = f"{DOCS_URL}/cli/build/in-image-builder/"
-DOCS_TESTING_FARM = f"{DOCS_URL}/configuration/upstream/tests"
-DOCS_VALIDATE_CONFIG = f"{DOCS_URL}/cli/config/validate"
-DOCS_VALIDATE_HOOKS = "https://packit.dev/posts/pre-commit-hooks#validate-config"
-
-KOJI_PRODUCTION_BUILDS_ISSUE = "https://pagure.io/releng/issue/9801"
+DOCS_APPROVAL_URL = f"{DOCS_URL}/configuration/upstream/approval"
+DOCS_DEPLOYMENT = f"{DOCS_URL}/deployment"
+DOCS_UPSTREAM = f"{DOCS_URL}/configuration/upstream"
+DOCS_DOWNSTREAM = f"{DOCS_URL}/configuration/downstream"
+DOCS_SYNC_RELEASE = f"{DOCS_URL}/configuration/upstream/sync-release"
+DOCS_COPR_BUILD = f"{DOCS_URL}/configuration/upstream/copr_build"
+DOCS_VM_IMAGE_BUILD = f"{DOCS_URL}/configuration/upstream/vm_image_build"
+DOCS_OPENSCANHUB = f"{DOCS_URL}/configuration/upstream/openscanhub"
+DOCS_UPSTREAM_TESTS = f"{DOCS_URL}/configuration/upstream/tests"
 
 SANDCASTLE_WORK_DIR = "/tmp/sandcastle"
 SANDCASTLE_IMAGE = "quay.io/packit/sandcastle"
@@ -25,16 +21,6 @@ SANDCASTLE_DEFAULT_PROJECT = "myproject"
 SANDCASTLE_PVC = "SANDCASTLE_PVC"
 
 CONFIG_FILE_NAME = "packit-service.yaml"
-
-TESTING_FARM_API_URL = "https://api.dev.testing-farm.io/v0.1/"
-TESTING_FARM_INSTALLABILITY_TEST_URL = "https://gitlab.com/testing-farm/tests"
-TESTING_FARM_INSTALLABILITY_TEST_REF = "main"
-TESTING_FARM_EXTRA_PARAM_MERGED_SUBTREES = (
-    "environments",
-    "test",
-    "settings",
-)
-TESTING_FARM_ARTIFACTS_KEY = "artifacts"
 
 MSG_DOWNSTREAM_JOB_ERROR_HEADER = (
     "Packit failed on creating {object} in dist-git "
@@ -138,87 +124,15 @@ CELERY_DEFAULT_MAIN_TASK_NAME = "task.steve_jobs.process_message"
 
 MSG_TABLE_HEADER_WITH_DETAILS = "| Name/Job | URL |\n| --- | --- |\n"
 
-DEFAULT_MAPPING_TF = {
-    "epel-6": "centos-6",
-    "epel-7": "centos-7",
-    "epel-8": "centos-stream-8",
-    "epel-9": "centos-stream-9",
-    "epel-10": "centos-stream-10",
-}
 
-DEFAULT_MAPPING_INTERNAL_TF = {
-    "epel-6": "rhel-6",
-    "epel-7": "rhel-7",
-    "epel-8": "rhel-8",
-    "epel-9": "centos-stream-9",
-    "epel-10": "centos-stream-10",
-}
 
 COMMENT_REACTION = "eyes"
 
 
-class KojiTaskState(Enum):
-    """
-    Koji states used in fedmsg payloads
-    for buildsys.task.state.change
-    used for scratch builds.
-    """
-
-    free = "FREE"  # 0
-    open = "OPEN"  # 1
-    closed = "CLOSED"  # 2
-    canceled = "CANCELED"  # 3
-    assigned = "ASSIGNED"  # 4
-    failed = "FAILED"  # 5
-
-    @staticmethod
-    def from_number(number: int):
-        return {
-            0: KojiTaskState.free,
-            1: KojiTaskState.open,
-            2: KojiTaskState.closed,
-            3: KojiTaskState.canceled,
-            4: KojiTaskState.assigned,
-            5: KojiTaskState.failed,
-        }.get(number)
 
 
-class KojiBuildState(Enum):
-    """
-    Koji states used in fedmsg payloads
-    for buildsys.build.state.change
-    used for prod (=non scratch) builds.
-    """
-
-    building = "BUILDING"  # 0
-    complete = "COMPLETE"  # 1
-    deleted = "DELETED"  # 2
-    failed = "FAILED"  # 3
-    canceled = "CANCELED"  # 4
-
-    @staticmethod
-    def from_number(number: int):
-        return {
-            0: KojiBuildState.building,
-            1: KojiBuildState.complete,
-            2: KojiBuildState.deleted,
-            3: KojiBuildState.failed,
-            4: KojiBuildState.canceled,
-        }.get(number)
 
 
-INTERNAL_TF_TESTS_NOT_ALLOWED = (
-    "{actor} can't run tests internally",
-    "*As a project maintainer, you can trigger the test job manually "
-    "via `{packit_comment_command_prefix} test` comment.*",
-)
-
-INTERNAL_TF_BUILDS_AND_TESTS_NOT_ALLOWED = (
-    "{actor} can't run tests (and builds) internally",
-    "*As a project maintainer, you can trigger the build and test jobs manually "
-    "via `{packit_comment_command_prefix} build` comment "
-    "or only test job via `{packit_comment_command_prefix} test` comment.*",
-)
 
 CUSTOM_COPR_PROJECT_NOT_ALLOWED_STATUS = "Not allowed to build in {copr_project} Copr project."
 CUSTOM_COPR_PROJECT_NOT_ALLOWED_CONTENT = (
@@ -253,25 +167,7 @@ GITLAB_ISSUE = (
     " repository. You can do so [here]({url}/-/project_members)."
 )
 
-DASHBOARD_JOBS_TESTING_FARM_PATH = "/jobs/testing-farm-runs"
 
-# https://docs.testing-farm.io/general/0.1/test-environment.html#_supported_architectures
-TESTING_FARM_SUPPORTED_ARCHS: dict[str, list[str]] = {
-    "public": [
-        "aarch64",
-        "x86_64",
-    ],
-    "redhat": [
-        "aarch64",
-        "ppc64le",
-        "s390x",
-        "x86_64",
-    ],
-}
-
-# [NOTE] for backwards-compatibility with existing references
-PUBLIC_TF_ARCHITECTURE_LIST = TESTING_FARM_SUPPORTED_ARCHS["public"]
-INTERNAL_TF_ARCHITECTURE_LIST = TESTING_FARM_SUPPORTED_ARCHS["redhat"]
 
 DENIED_MSG = (
     f"You were denied from using Packit Service. If you think this was done by mistake, "

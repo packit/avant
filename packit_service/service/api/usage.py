@@ -22,11 +22,8 @@ from packit_service.constants import (
 from packit_service.models import (
     CoprBuildGroupModel,
     GitProjectModel,
-    KojiBuildGroupModel,
     ProjectEventModelType,
     SRPMBuildModel,
-    SyncReleaseModel,
-    TFTTestRunGroupModel,
     VMImageBuildTargetModel,
     get_usage_data,
 )
@@ -263,10 +260,7 @@ def get_project_usage_data(project: str, datetime_from=None, datetime_to=None):
     for job_model in [
         SRPMBuildModel,
         CoprBuildGroupModel,
-        KojiBuildGroupModel,
         VMImageBuildTargetModel,
-        TFTTestRunGroupModel,
-        SyncReleaseModel,
     ]:
         job_name: str = job_model.__tablename__  # type: ignore
         jobs[job_name] = get_result_dictionary(
@@ -337,12 +331,12 @@ def get_result_dictionary(
 class Onboarded2024Q1(Resource):
     @usage_ns.response(
         HTTPStatus.OK,
-        "Onboarded projects for which exist a Bodhi update or a Koji build or a Packit merged PR.",
+        "Onboarded projects for which exist a merged Packit PR.",
     )
     def get(self):
         """
         Returns a list of onboarded projects for which exist at least a
-        Bodhi update, a downstream Koji build or a merged Packit PR.
+        merged Packit PR.
 
         The data for the response is taken from the database but a long running
         task is spawned in the mean time, and the new long running task will

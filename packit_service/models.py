@@ -184,7 +184,7 @@ def get_most_recent_targets(
     Gets most recent models from an iterable (regarding submission time).
 
     Args:
-        models: Copr or TF models - if there are any duplicates in them then use the most
+        models: Copr models - if there are any duplicates in them then use the most
          recent model
 
     Returns:
@@ -2014,10 +2014,8 @@ class SRPMBuildModel(ProjectAndEventsConnector, Base):
           -> ProjectEventModel is reused.
         * On `/packit test` comment:
           -> SRPMBuildModel and CoprBuildTargetModel are reused.
-          -> New TFTTestRunTargetModel is created.
           -> New PipelineModel is created and
-             collects this new TFTTestRunTargetModel with old SRPMBuildModel and
-             CoprBuildTargetModel.
+             collects the existing SRPMBuildModel and CoprBuildTargetModel.
         """
         with sa_session_transaction(commit=True) as session:
             srpm_build = cls()

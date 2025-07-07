@@ -3,9 +3,7 @@
 
 import logging
 
-from packit_service.constants import (
-    INTERNAL_TF_BUILDS_AND_TESTS_NOT_ALLOWED,
-)
+
 from packit_service.events import gitlab
 from packit_service.worker.checker.abstract import (
     ActorChecker,
@@ -117,24 +115,7 @@ class CanActorRunTestsJob(
     """
 
     def _pre_check(self) -> bool:
-        # check the actor if there is any test job which requires
-        # builds and uses internal TF
-        for test_job in self.copr_build_helper.job_tests_all:
-            if (
-                test_job
-                and test_job.use_internal_tf
-                and not test_job.skip_build
-                and not self.project.can_merge_pr(self.actor)
-                and self.actor not in self.service_config.admins
-            ):
-                self.copr_build_helper.report_status_to_build(
-                    description=INTERNAL_TF_BUILDS_AND_TESTS_NOT_ALLOWED[0].format(
-                        actor=self.actor,
-                    ),
-                    state=BaseCommitStatus.neutral,
-                    markdown_content=INTERNAL_TF_BUILDS_AND_TESTS_NOT_ALLOWED[1].format(
-                        packit_comment_command_prefix=self.service_config.comment_command_prefix,
-                    ),
-                )
-                return False
+        # All test jobs are now allowed for external contributors
+        # since Testing Farm integration has been removed
+        logger.debug("All test jobs allowed for external contributors")
         return True

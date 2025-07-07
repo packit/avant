@@ -139,16 +139,10 @@ class TaskWithRetry(Task):
     # retry if worker gets obliterated during execution
     acks_late = True
 
-
-class BodhiTaskWithRetry(TaskWithRetry):
-    # hardcode for creating bodhi updates to account for the tagging race condition
-    max_retries = 5
-    # also disable jitter for the same reason
-    retry_jitter = False
-    retry_kwargs: ClassVar[dict] = {
-        "max_retries": max_retries,
-        "retry_jitter": retry_jitter,
-    }
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        """Log the failure and retry the task."""
+        logger.error(f"Task {task_id} failed: {exc}")
+        super().on_failure(exc, task_id, args, kwargs, einfo)
 
 
 @celery_app.task(

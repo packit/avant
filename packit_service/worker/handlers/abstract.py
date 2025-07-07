@@ -167,8 +167,6 @@ class TaskName(str, enum.Enum):
     copr_build_end = "task.run_copr_build_end_handler"
     copr_build = "task.run_copr_build_handler"
     installation = "task.run_installation_handler"
-    # Fedora notification is ok for now
-    # downstream_koji_build_report = "task.run_downstream_koji_build_report_handler"
     github_fas_verification = "task.github_fas_verification"
     vm_image_build = "task.run_vm_image_build_handler"
     vm_image_build_result = "task.run_vm_image_build_result_handler"

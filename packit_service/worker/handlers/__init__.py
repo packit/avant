@@ -4,7 +4,7 @@
 # If you have some problems with the imports between files in this directory,
 # try using absolute import.
 # Example:
-# from packit_service.worker.handlers.fedmsg import something
+# from packit_service.worker.handlers.copr import something
 # instead of
 # from packit_service.worker.handlers import something
 

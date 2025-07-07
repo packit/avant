@@ -106,8 +106,8 @@ class Parser:
         """
         Try to parse all JSONs that we process.
 
-        When reacting to fedmsg events, be aware that we are squashing the structure
-        so we take only `body` with the `topic` key included.
+        When reacting to events, be aware that we are squashing the structure
+        of the event data to make it more uniform across different event types.
         See: https://github.com/packit/packit-service-fedmsg/blob/
              e53586bf7ace0c46fd6812fe8dc11491e5e6cf41/packit_service_fedmsg/consumer.py#L137
 
@@ -1237,8 +1237,6 @@ class Parser:
     def parse_pagure_pr_flag_event(event) -> Optional[pagure.pr.Flag]:
         """
         Look into the provided event and see if it is Pagure PR Flag added/updated event.
-        https://fedora-fedmsg.readthedocs.io/en/latest/topics.html#pagure-pull-request-flag-added
-        https://fedora-fedmsg.readthedocs.io/en/latest/topics.html#pagure-pull-request-flag-updated
         """
 
         if ".pagure.pull-request.flag." not in (topic := event.get("topic", "")):

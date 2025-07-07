@@ -216,38 +216,7 @@ class EventData:
                 project_url=self.project_url,
                 commit_hash=self.commit_sha,
             )
-        elif self.event_type in {
-            "anitya.NewHotness",
-        }:
-            if not self.project_url:
-                (
-                    self._db_project_object,
-                    self._db_project_event,
-                ) = ProjectEventModel.add_anitya_version_event(
-                    version=self.event_dict.get("version"),
-                    project_name=self.event_dict.get("anitya_project_name"),
-                    project_id=self.event_dict.get("anitya_project_id"),
-                    package=self.event_dict.get("package_name"),
-                )
-                return
 
-            if self.project:
-                namespace = self.project.namespace
-                repo_name = self.project.repo
-            else:
-                repo_url = RepoUrl.parse(self.project_url)
-                namespace = repo_url.namespace
-                repo_name = repo_url.repo
-            (
-                self._db_project_object,
-                self._db_project_event,
-            ) = ProjectEventModel.add_release_event(
-                tag_name=self.tag_name,
-                namespace=namespace,
-                repo_name=repo_name,
-                project_url=self.project_url,
-                commit_hash=self.commit_sha,
-            )
         elif self.event_type in {
             "github.issue.Comment",
             "gitlab.issue.Comment",
@@ -261,32 +230,7 @@ class EventData:
                 repo_name=self.project.repo,
                 project_url=self.project_url,
             )
-        elif self.event_type in {
-            "koji.tag.Build",
-        }:
-            (
-                self._db_project_object,
-                self._db_project_event,
-            ) = ProjectEventModel.add_koji_build_tag_event(
-                task_id=str(self.event_dict.get("task_id")),
-                koji_tag_name=self.tag_name,
-                namespace=self.project.namespace,
-                repo_name=self.project.repo,
-                project_url=self.project_url,
-            )
-        elif self.event_type in {
-            "koji.result.Build",
-        }:
-            (
-                self._db_project_object,
-                self._db_project_event,
-            ) = ProjectEventModel.add_branch_push_event(
-                branch_name=self.event_dict.get("branch_name"),
-                namespace=self.project.namespace,
-                repo_name=self.project.repo,
-                project_url=self.project_url,
-                commit_sha=self.event_dict.get("commit_sha"),
-            )
+
         elif self.event_type in {
             "github.commit.Comment",
             "gitlab.commit.Comment",
@@ -354,5 +298,5 @@ class EventData:
             return None
         return ServiceConfig.get_service_config().get_project(
             url=self.project_url or self.db_project_object.project.project_url,
-            required=self.event_type not in ("anitya.NewHotness",),
+            required=True,
         )

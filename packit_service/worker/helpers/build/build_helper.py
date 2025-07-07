@@ -190,7 +190,7 @@ class BaseBuildJobHelper(BaseJobHelper):
         """
         Return valid targets/chroots to build.
 
-        (Used when submitting the koji/copr build and as a part of the commit status name.)
+        (Used when submitting the copr build and as a part of the commit status name.)
         """
         if self.build_targets_override:
             logger.debug(f"Build targets override: {self.build_targets_override}")

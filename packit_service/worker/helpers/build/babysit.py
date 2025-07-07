@@ -22,11 +22,6 @@ from packit_service.constants import (
     COPR_SUCC_STATE,
     DEFAULT_JOB_TIMEOUT,
 )
-from packit_service.events import copr as copr_events
-from packit_service.events import (
-    vm_image,
-)
-from packit_service.events.enums import FedmsgTopic
 from packit_service.models import (
     BuildStatus,
     CoprBuildTargetModel,
@@ -96,7 +91,7 @@ def update_copr_builds(build_id: int, builds: Iterable["CoprBuildTargetModel"]) 
     Builds which have been pending for too long will be updated to error (timeout).
     Builds which have started and are waiting for SRPM will get their
         CoprBuildTargetModel and SRPMBuildModel updated (to cover the case
-        where we do not correctly react to fedmsg).
+        where we do not correctly react to events).
 
     Args:
         build_id: ID of the copr build to update.
@@ -203,8 +198,8 @@ def update_srpm_build_state(
         # Nothing to do
         return
 
-    event = copr_events.End(
-        topic=FedmsgTopic.copr_build_finished.value,
+    event = copr.End(
+        topic=copr.FedmsgTopic.copr_build_finished.value,
         build_id=int(
             build.copr_build_id,
         ),  # we expect int there even though we have str in DB
@@ -268,18 +263,18 @@ def update_copr_build_state(
     event_kls: type[copr.CoprBuild]
     handler_kls: type[AbstractCoprBuildReportHandler]
     if chroot_build_copr.ended_on:
-        event_kls = copr_events.End
+        event_kls = copr.End
         handler_kls = CoprBuildEndHandler
         timestamp = chroot_build_copr.ended_on
     elif build_copr.started_on and build.status == BuildStatus.waiting_for_srpm:
-        event_kls = copr_events.Start
+        event_kls = copr.Start
         handler_kls = CoprBuildStartHandler
         timestamp = chroot_build_copr.started_on
     else:
         # Nothing to do
         return
     event = event_kls(
-        topic=FedmsgTopic.copr_build_finished.value,
+        topic=copr.FedmsgTopic.copr_build_finished.value,
         build_id=int(
             build.build_id,
         ),  # we expect int there even though we have str in DB
@@ -416,7 +411,7 @@ def update_vm_image_build(build_id: int, build: "VMImageBuildTargetModel"):
         message = get_message_for_successful_build(body["image_status"])
         logger.debug(message)
 
-    event = vm_image.Result(
+    event = copr.Result(
         build.build_id,
         build.target,
         build.get_pr_id(),
