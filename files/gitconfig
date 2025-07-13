@@ -1,0 +1,9 @@
+[user]
+    name = Packit
+    email = hello@packit.dev
+[push]
+    default = current
+# https://github.com/packit/packit-service/issues/1496
+# git refuses to fetch: 'fatal: unsafe repository ('/tmp/sandcastle' is owned by someone else)'
+[safe]
+    directory = /tmp/sandcastle

@@ -1,0 +1,26 @@
+---
+# This playbook is running tests inside Zuul
+- name: Run packit-service tests
+  hosts: all
+  tasks:
+    - name: Install podman
+      ansible.builtin.package:
+        name:
+          - podman
+        state: present
+      become: true
+    # Fix the SELinux context for podman
+    - name: Create ~/.local/share/
+      ansible.builtin.file:
+        path: ~/.local/share/
+        state: directory
+        recurse: yes
+        setype: data_home_t
+    - name: Run tests within a container
+      ansible.builtin.command: "make check-in-container"
+      args:
+        chdir: "{{ zuul.project.src_dir }}"
+      environment:
+        COLOR: "no"
+        SOURCE_BRANCH: "{{ zuul.branch }}"
+        CONTAINER_RUN_INTERACTIVE: ""

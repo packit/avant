@@ -1,0 +1,14 @@
+---
+- name: Build packit-service image form current src dir.
+  hosts: all
+  tasks:
+    - name: Build service and worker images
+      ansible.builtin.command: "make {{ item }}"
+      args:
+        chdir: "{{ zuul.project.src_dir }}"
+      become: true
+      with_items:
+        - service
+        - worker
+      environment:
+        SOURCE_BRANCH: "{{ zuul.branch }}"
