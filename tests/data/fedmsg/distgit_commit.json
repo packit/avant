@@ -1,0 +1,11 @@
+{
+  "agent": "rhcontainerbot",
+  "branch": "main",
+  "end_commit": "abcd",
+  "total_commits": 1,
+  "repo": {
+    "namespace": "rpms",
+    "name": "buildah"
+  },
+  "topic": "org.fedoraproject.prod.pagure.git.receive"
+}

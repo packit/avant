@@ -1,0 +1,16 @@
+---
+# This playbook is running tests inside Zuul
+- name: Run packit-service tests
+  hosts: all
+  tasks:
+    - name: Creates zuul secrets directory
+      ansible.builtin.file:
+        path: "{{ zuul.project.src_dir }}/secrets/packit/dev"
+        state: directory
+    - name: Run tests which are executed within openshift
+      ansible.builtin.command: make check-inside-openshift-zuul
+      args:
+        chdir: "{{ zuul.project.src_dir }}"
+      become: true
+      environment:
+        SOURCE_BRANCH: "{{ zuul.branch }}"
