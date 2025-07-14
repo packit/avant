@@ -202,15 +202,16 @@ class Parser:
 
     @staticmethod
     def parse_new_package_event(event) -> Optional[NewPackageEvent]:
-        if not all(key in event for key in ["package_name", "author", "version"]):
+        # Accept both "version" and "package_version"
+        version = event.get("version") or event.get("package_version")
+        if not all([event.get("package_name"), event.get("author"), version]):
             return None
 
         return NewPackageEvent(
             package_name=event["package_name"],
             author=event["author"],
-            package_version=event["version"]
+            package_version=version
         )
-
     @staticmethod
     def parse_mr_event(event) -> Optional[gitlab.mr.Action]:
         """Look into the provided event and see if it's one for a new gitlab MR."""

@@ -28,7 +28,7 @@ from packit_service.events import (
     koji,
     pagure,
     testing_farm,
-    avant_client
+    new_package
 )
 from packit_service.events.event import Event
 from packit_service.events.event_data import EventData
@@ -57,6 +57,7 @@ from packit_service.worker.handlers.abstract import (
     SUPPORTED_EVENTS_FOR_HANDLER_FEDORA_CI,
     FedoraCIJobHandler,
     JobHandler,
+    SUPPORTED_EVENTS_FOR_HANDLER_NEW_PACKAGE
 )
 from packit_service.worker.helpers.build import (
     BaseBuildJobHelper,
@@ -76,7 +77,8 @@ from packit_service.worker.result import TaskResults
 logger = logging.getLogger(__name__)
 
 
-MANUAL_OR_RESULT_EVENTS = [abstract.comment.CommentEvent, abstract.base.Result, github.check.Rerun]
+MANUAL_OR_RESULT_EVENTS = [
+    abstract.comment.CommentEvent, abstract.base.Result, github.check.Rerun]
 
 
 def get_handlers_for_comment(
@@ -93,7 +95,8 @@ def get_handlers_for_comment(
     Returns:
         Set of handlers that are triggered by a comment.
     """
-    commands = get_packit_commands_from_comment(comment, packit_comment_command_prefix)
+    commands = get_packit_commands_from_comment(
+        comment, packit_comment_command_prefix)
     if not commands:
         return set()
 
@@ -124,7 +127,8 @@ def get_handlers_for_comment_fedora_ci(
     else:
         packit_comment_command_prefix = "/packit-ci"
 
-    commands = get_packit_commands_from_comment(comment, packit_comment_command_prefix)
+    commands = get_packit_commands_from_comment(
+        comment, packit_comment_command_prefix)
     if not commands:
         return set()
 
@@ -147,7 +151,8 @@ def get_handlers_for_check_rerun(check_name_job: str) -> set[type[JobHandler]]:
     handlers = MAP_CHECK_PREFIX_TO_HANDLER[check_name_job]
     if not handlers:
         logger.debug(
-            f"Rerun for check with {check_name_job} prefix not supported by packit.",
+            f"Rerun for check with {
+                check_name_job} prefix not supported by packit.",
         )
     return handlers
 
@@ -199,7 +204,8 @@ class SteveJobs:
         elif pre_check_failed := not event_object.pre_check():
             steve.pushgateway.events_pre_check_failed.inc()
 
-        result = [] if (event_not_handled or pre_check_failed) else steve.process()
+        result = [] if (
+            event_not_handled or pre_check_failed) else steve.process()
 
         steve.pushgateway.push()
         return result
@@ -237,7 +243,7 @@ class SteveJobs:
 
         if isinstance(
             self.event,
-            avant_client.abstract.AvantEvent
+            new_package.NewPackageEvent
         ):
             processing_results = self.process_organisation_jobs()
             if not processing_results:
@@ -257,12 +263,22 @@ class SteveJobs:
         return processing_results
 
     def process_organisation_jobs(self) -> List[TaskResults]:
-        handlers_triggered_by_job = None
+        if isinstance(self.event, new_package.NewPackageEvent):
+            logger.info("Package Received")
+            results = []
+            for handler_cls in self.get_new_package_handlers_for_event():
+                handler = handler_cls(event=self.event.__dict__)
+                result = handler.run_job()
+                results.append(result)
+            return results
+        return []
 
-        if isinstance(self.event, avant_client.abstract.AvantEvent):
-            pass
-
-        #TODO
+    def get_new_package_handlers_for_event(self):
+        matching_handlers = set()
+        for handler, events in SUPPORTED_EVENTS_FOR_HANDLER_NEW_PACKAGE.items():
+            if isinstance(self.event, tuple(events)):
+                matching_handlers.add(handler)
+        return matching_handlers
 
     def initialize_job_helper(
         self,
@@ -298,7 +314,8 @@ class SteveJobs:
             params["branches_override"] = self.event.branches_override
             return propose_downstream_helper(**params)
 
-        helper_kls: type[Union[TestingFarmJobHelper, CoprBuildJobHelper, KojiBuildJobHelper]]
+        helper_kls: type[Union[TestingFarmJobHelper,
+                               CoprBuildJobHelper, KojiBuildJobHelper]]
 
         if handler_kls == TestingFarmHandler:
             helper_kls = TestingFarmJobHelper
@@ -353,7 +370,6 @@ class SteveJobs:
 
         self.push_copr_metrics(handler_kls, number_of_build_targets)
 
-
     def process_jobs(self) -> list[TaskResults]:
         """
         Create Celery tasks for a job handler (if trigger matches) for every
@@ -380,7 +396,8 @@ class SteveJobs:
 
         if not handler_classes:
             logger.debug(
-                f"There is no handler for {self.event} event suitable for the configuration.",
+                f"There is no handler for {
+                    self.event} event suitable for the configuration.",
             )
             return []
 
@@ -413,7 +430,8 @@ class SteveJobs:
                 ]
 
             processing_results.extend(
-                self.create_tasks(job_configs, handler_kls, statuses_check_feedback),
+                self.create_tasks(job_configs, handler_kls,
+                                  statuses_check_feedback),
             )
         self.push_statuses_metrics(statuses_check_feedback)
 
@@ -443,7 +461,8 @@ class SteveJobs:
                 self.report_task_accepted(
                     handler_kls=handler_kls,
                     job_config=job_config,
-                    update_feedback_time=lambda t: statuses_check_feedback.append(t),
+                    update_feedback_time=lambda t: statuses_check_feedback.append(
+                        t),
                 )
                 if handler_kls in (
                     CoprBuildHandler,
@@ -453,10 +472,12 @@ class SteveJobs:
                     self.event.store_packages_config()
 
                 signatures.append(
-                    handler_kls.get_signature(event=self.event, job=job_config),
+                    handler_kls.get_signature(
+                        event=self.event, job=job_config),
                 )
                 logger.debug(
-                    f"Got signature for handler={handler_kls} and job_config={job_config}.",
+                    f"Got signature for handler={
+                        handler_kls} and job_config={job_config}.",
                 )
                 processing_results.append(
                     TaskResults.create_from(
@@ -490,7 +511,8 @@ class SteveJobs:
         if self.service_config.deployment not in job_config.packit_instances:
             logger.debug(
                 f"Current deployment ({self.service_config.deployment}) "
-                f"does not match the job configuration ({job_config.packit_instances}). "
+                f"does not match the job configuration ({
+                    job_config.packit_instances}). "
                 "The job will not be run.",
             )
             return False
@@ -517,7 +539,8 @@ class SteveJobs:
         """
         # do the check only for events triggering the pipeline
         if isinstance(self.event, abstract.base.Result):
-            logger.debug("Skipping private repository check for this type of event.")
+            logger.debug(
+                "Skipping private repository check for this type of event.")
 
         # CoprBuildEvent.get_project returns None when the build id is not known
         elif not self.event.project:
@@ -531,7 +554,8 @@ class SteveJobs:
             if service_with_namespace not in self.service_config.enabled_private_namespaces:
                 logger.info(
                     f"We do not interact with private repositories by default. "
-                    f"Add `{service_with_namespace}` to the `enabled_private_namespaces` "
+                    f"Add `{
+                        service_with_namespace}` to the `enabled_private_namespaces` "
                     f"in the service configuration.",
                 )
                 return False
@@ -556,7 +580,6 @@ class SteveJobs:
             bd = dict(b.__dict__)
             bd.pop("trigger")
             return ad == bd
-
 
         matching_jobs: list[JobConfig] = []
         if isinstance(self.event, pagure.pr.Comment):
@@ -719,7 +742,8 @@ class SteveJobs:
 
         if not matching_handlers:
             logger.debug(
-                f"We did not find any handler for a following event:\n{self.event.event_type()}",
+                f"We did not find any handler for a following event:\n{
+                    self.event.event_type()}",
             )
 
         logger.debug(f"Matching handlers: {matching_handlers}")
@@ -748,7 +772,8 @@ class SteveJobs:
         )
 
         return (
-            isinstance(self.event, tuple(SUPPORTED_EVENTS_FOR_HANDLER[handler]))
+            isinstance(self.event, tuple(
+                SUPPORTED_EVENTS_FOR_HANDLER[handler]))
             and handler_matches_to_comment_or_check_rerun_job
         )
 
@@ -794,7 +819,8 @@ class SteveJobs:
 
         if not matching_jobs:
             logger.warning(
-                f"We did not find any config for {handler_kls} and a following event:\n"
+                f"We did not find any config for {
+                    handler_kls} and a following event:\n"
                 f"{self.event.event_type()}",
             )
 
@@ -825,7 +851,8 @@ class SteveJobs:
             end=statuses_check_feedback[0],
         )
         logger.debug(
-            f"Reporting first initial status check time: {response_time} seconds.",
+            f"Reporting first initial status check time: {
+                response_time} seconds.",
         )
         self.pushgateway.first_initial_status_time.observe(response_time)
         if response_time > 25:
@@ -835,7 +862,8 @@ class SteveJobs:
             # we need more info why this has happened
             logger.debug(f"Event dict: {self.event}.")
             logger.error(
-                f"Event {self.event.event_type()} took more than 15s to process.",
+                f"Event {self.event.event_type(
+                )} took more than 15s to process.",
             )
         # set the time when the accepted status was set so that we
         # can use it later for measurements
@@ -846,7 +874,8 @@ class SteveJobs:
             end=statuses_check_feedback[-1],
         )
         logger.debug(
-            f"Reporting last initial status check time: {response_time} seconds.",
+            f"Reporting last initial status check time: {
+                response_time} seconds.",
         )
         self.pushgateway.last_initial_status_time.observe(response_time)
 

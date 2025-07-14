@@ -1,4 +1,7 @@
-from packit_service.worker.handlers.abstract import NewPackageHandler, TaskName, reacts_to_new_package as reacts_to_new_package_decorator
+from packit_service.worker.handlers.abstract import (
+    NewPackageHandler, TaskName,
+    reacts_to_new_package as reacts_to_new_package_decorator
+)
 from packit_service.events.new_package import NewPackageEvent
 from packit_service.worker.result import TaskResults
 import logging
@@ -16,7 +19,7 @@ class NewPackageRepositoryHandler(NewPackageHandler):
         self.new_package_event = NewPackageEvent(
             package_name=event["package_name"],
             package_version=event["package_version"],
-            author=event["author"]
+            author=event.get("author") if event.get("author") else event.get("actor")
         )
 
     def run(self) -> TaskResults:
@@ -66,7 +69,8 @@ class NewPackageRepositoryHandler(NewPackageHandler):
         """
         return self.run()
 
-    def _create_repository_stub(self, package_name: str, package_version: str, author: str):
+    def _create_repository_stub(self, package_name: str, package_version: str,
+                                author: str):
         """
         Stub method for repository creation.
         TODO: Replace with actual repository creation logic.
@@ -90,3 +94,23 @@ class NewPackageRepositoryHandler(NewPackageHandler):
 
         # For now, just log the action
         logger.info(f"Repository creation stub completed for {package_name}")
+
+    @property
+    def clean_api(self):
+        return None
+
+    @property
+    def project(self):
+        return None
+
+    @property
+    def project_url(self):
+        return None
+
+    @property
+    def service_config(self):
+        return None
+
+    @property
+    def packit_api(self):
+        return None
