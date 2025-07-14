@@ -33,7 +33,8 @@ from packit_service.events import (
     pagure,
     testing_farm,
     vm_image,
-    new_package
+    new_package,
+    forgejo
 )
 from packit_service.events.enums import (
     IssueCommentAction,
@@ -583,6 +584,58 @@ class Parser:
             git_ref=ref,
             project_url=repo_url,
             commit_sha=head_commit,
+            commit_sha_before=before,
+        )
+
+    @staticmethod
+    def parse_forgejo_push_event(event: dict) -> Optional[forgejo.push.Commit]:
+        raw_ref = event.get("ref")
+        before  = event.get("before")
+        after   = event.get("after")
+        pusher  = nested_get(event, "pusher", "login") or nested_get(event, "pusher", "name")
+
+        if not (raw_ref and after and before and pusher):
+            return None
+
+        # Forgejo sets `deleted` identically to GitHub
+        if event.get("deleted"):
+            logger.info(
+                f"Forgejo push event on '{raw_ref}' by {pusher} to delete ref"
+            )
+            return None
+
+        # Number of commits introduced by this push
+        commits = event.get("commits") or []
+        num_commits = len(commits)
+
+        # Strip the ref prefix to get the branch/tag name
+        _, ref_type, ref_name = raw_ref.split("/", 2)
+        if ref_type != "heads":
+            logger.debug(
+                f"Forgejo push event ignored – not a branch push ('{raw_ref}')"
+            )
+            return None
+
+        logger.info(
+            f"Forgejo push event on '{ref_name}': "
+            f"{before[:8]} → {after[:8]} by {pusher} "
+            f"({num_commits} {'commit' if num_commits == 1 else 'commits'})"
+        )
+
+        repo_namespace = nested_get(event, "repository", "owner", "login")
+        repo_name      = nested_get(event, "repository", "name")
+        repo_url       = nested_get(event, "repository", "html_url")
+
+        if not (repo_namespace and repo_name):
+            logger.warning("Forgejo push event missing repository namespace/name")
+            return None
+
+        return forgejo.push.Commit(
+            repo_namespace=repo_namespace,
+            repo_name=repo_name,
+            git_ref=ref_name,
+            project_url=repo_url,
+            commit_sha=after,
             commit_sha_before=before,
         )
 
@@ -1879,6 +1932,9 @@ class Parser:
             "push": parse_github_push_event.__func__,  # type: ignore
             "installation": parse_installation_event.__func__,  # type: ignore
             "commit_comment": parse_commit_comment_event.__func__,  # type: ignore
+        },
+        "forgejo": {
+            "push": parse_forgejo_push_event.__func__,  # type: ignore
         },
         # https://docs.gitlab.com/ee/user/project/integrations/webhook_events.html
         "gitlab": {

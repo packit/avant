@@ -26,6 +26,7 @@ from packit_service.events import (
     copr,
     github,
     gitlab,
+    forgejo
 )
 from packit_service.models import (
     BuildStatus,
@@ -82,6 +83,7 @@ logger = logging.getLogger(__name__)
 @reacts_to(github.push.Commit)
 @reacts_to(gitlab.push.Commit)
 @reacts_to(gitlab.mr.Action)
+@reacts_to(forgejo.push.Commit)
 @reacts_to(github.check.Rerun)
 @reacts_to(github.pr.Comment)
 @reacts_to(gitlab.mr.Comment)
