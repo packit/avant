@@ -51,7 +51,7 @@ def load_package_config(package_config: dict):
     return PackageConfig.post_load(package_config_obj)
 
 
-def dump_package_config(package_config: PackageConfig):
+def dump_package_config(package_config: Optional[PackageConfig]):
     return PackageConfigSchema().dump(package_config) if package_config else None
 
 
@@ -59,7 +59,7 @@ def load_job_config(job_config: dict):
     return JobConfigSchema().load(job_config) if job_config else None
 
 
-def dump_job_config(job_config: JobConfig):
+def dump_job_config(job_config: Optional[JobConfig]):
     return JobConfigSchema().dump(job_config) if job_config else None
 
 

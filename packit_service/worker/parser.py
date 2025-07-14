@@ -141,6 +141,8 @@ class Parser:
             pagure.push.Commit,
             testing_farm.Result,
             vm_image.Result,
+            forgejo.push.Commit,
+            forgejo.issue.Comment,
         ]
     ]:
         """
@@ -192,6 +194,7 @@ class Parser:
                 Parser.parse_commit_comment_event,
                 Parser.parse_pagure_pull_request_event,
                 Parser.parse_new_package_event,
+                Parser.parse_forgejo_comment_event,
             )
         ):
             if response:
@@ -650,6 +653,59 @@ class Parser:
         if nested_get(event, "issue", "pull_request"):
             return Parser.parse_pull_request_comment_event(event)
         return Parser.parse_issue_comment_event(event)
+
+    @staticmethod
+    def parse_forgejo_comment_event(
+        event,
+    ) -> Optional[forgejo.issue.Comment]:
+        """Look into the provided event and see if it is Forgejo issue or PR comment event."""
+        # Remove the check that blocks issue comments
+        # Accept both issue and PR comments (PR comments will have 'pull_request' not None)
+        # For now, parse both the same way, as Forgejo's payload is similar for both
+        # TODO: clean this up and make it actually usable.
+        issue_id = nested_get(event, "issue", "number")
+        action = event.get("action")
+        if action not in {"created", "edited"} or not issue_id:
+            return None
+
+        comment = nested_get(event, "comment", "body")
+        comment_id = nested_get(event, "comment", "id")
+        logger.info(f"Forgejo issue#{issue_id} comment: {comment!r} id#{comment_id} {action!r} event.")
+
+        # For both issue and PR comments, the repo info is under 'repository'
+        base_repo_namespace = nested_get(event, "issue", "user", "login")
+        base_repo_name = nested_get(event, "repository", "name")
+        if not (base_repo_name and base_repo_namespace):
+            logger.warning("No full name of the repository.")
+            return None
+
+        user_login = nested_get(event, "comment", "user", "login")
+        if not user_login:
+            logger.warning("No Forgejo login name from event.")
+            return None
+
+        target_repo_namespace = nested_get(event, "repository", "owner", "login")
+        target_repo_name = nested_get(event, "repository", "name")
+        if not (target_repo_name and target_repo_namespace):
+            logger.warning("No full name of the repository.")
+            return None
+        
+        https_url = event["repository"]["html_url"]
+        return forgejo.issue.Comment(
+            action=IssueCommentAction[action],
+            issue_id=issue_id,
+            repo_namespace=base_repo_namespace,
+            repo_name=base_repo_name,
+            target_repo=f"{target_repo_namespace}/{target_repo_name}",
+            project_url=https_url,
+            actor=user_login,
+            comment=comment,
+            comment_id=comment_id,
+            tag_name="",
+            base_ref="",
+            comment_object=None,
+            dist_git_project_url=None,
+        )
 
     @staticmethod
     def parse_pull_request_comment_event(
@@ -1936,6 +1992,7 @@ class Parser:
         },
         "forgejo": {
             "push": parse_forgejo_push_event.__func__,  # type: ignore
+            "issue_comment": parse_forgejo_comment_event.__func__,  # type: ignore
         },
         # https://docs.gitlab.com/ee/user/project/integrations/webhook_events.html
         "gitlab": {

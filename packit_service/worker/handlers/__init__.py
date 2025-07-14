@@ -47,6 +47,9 @@ from packit_service.worker.handlers.vm_image import (
 from packit_service.worker.handlers.new_package import (
     NewPackageRepositoryHandler,
 )
+from packit_service.worker.handlers.hello_world import (
+    HelloWorldNewPackageHandler,
+)
 
 __all__ = [
     Handler.__name__,
@@ -69,4 +72,5 @@ __all__ = [
     CoprOpenScanHubTaskFinishedHandler.__name__,
     CoprOpenScanHubTaskStartedHandler.__name__,
     NewPackageRepositoryHandler.__name__,
+    HelloWorldNewPackageHandler.__name__,
 ]

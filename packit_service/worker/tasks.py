@@ -244,6 +244,14 @@ def run_new_package_handler(event: dict):
     result = handler.run_job()
     return get_handlers_task_results(result, event)
 
+
+@celery_app.task(name=TaskName.hello_world, base=TaskWithRetry)
+def run_hello_world_handler(event: dict):
+    from packit_service.worker.handlers.hello_world import HelloWorldNewPackageHandler
+    handler = HelloWorldNewPackageHandler(event=event)
+    result = handler.run_job()
+    return get_handlers_task_results(result, event)
+
 @celery_app.task(name=TaskName.copr_build_end, base=TaskWithRetry)
 def run_copr_build_end_handler(event: dict, package_config: dict, job_config: dict):
     handler = CoprBuildEndHandler(

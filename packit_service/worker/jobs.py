@@ -28,7 +28,8 @@ from packit_service.events import (
     koji,
     pagure,
     testing_farm,
-    new_package
+    new_package,
+    forgejo
 )
 from packit_service.events.event import Event
 from packit_service.events.event_data import EventData
@@ -57,7 +58,9 @@ from packit_service.worker.handlers.abstract import (
     SUPPORTED_EVENTS_FOR_HANDLER_FEDORA_CI,
     FedoraCIJobHandler,
     JobHandler,
-    SUPPORTED_EVENTS_FOR_HANDLER_NEW_PACKAGE
+    NewPackageHandler,
+    SUPPORTED_EVENTS_FOR_HANDLER_NEW_PACKAGE,
+    MAP_COMMENT_TO_HANDLER_NEW_PACKAGE
 )
 from packit_service.worker.helpers.build import (
     BaseBuildJobHelper,
@@ -105,6 +108,22 @@ def get_handlers_for_comment(
         logger.debug(f"Command {commands[0]} not supported by packit.")
     return handlers
 
+def get_handlers_for_comment_new_package(
+    comment: str,
+    packit_comment_command_prefix: str,
+) -> set[type[NewPackageHandler]]:
+    """
+    Get handlers for the given command respecting packit_comment_command_prefix.
+    """
+    commands = get_packit_commands_from_comment(
+        comment, packit_comment_command_prefix)
+    if not commands:
+        return set()
+    
+    handlers = MAP_COMMENT_TO_HANDLER_NEW_PACKAGE[commands[0]]
+    if not handlers:
+        logger.debug(f"Command {commands[0]} not supported by packit.")
+    return handlers
 
 def get_handlers_for_comment_fedora_ci(
     comment: str,
@@ -138,7 +157,7 @@ def get_handlers_for_comment_fedora_ci(
     return handlers
 
 
-def get_handlers_for_check_rerun(check_name_job: str) -> set[type[JobHandler]]:
+def get_handlers_for_check_rerun(comment: str, packit_comment_command_prefix: str) -> set[type[JobHandler]]:
     """
     Get handlers for the given check name.
 
@@ -148,11 +167,21 @@ def get_handlers_for_check_rerun(check_name_job: str) -> set[type[JobHandler]]:
     Returns:
         Set of handlers that are triggered by a check rerun.
     """
-    handlers = MAP_CHECK_PREFIX_TO_HANDLER[check_name_job]
+    commands = get_packit_commands_from_comment(
+        comment,
+        packit_comment_command_prefix=packit_comment_command_prefix,
+    )
+
+    if packit_comment_command_prefix.endswith("-test"):
+        packit_comment_command_prefix = "/packit-test"
+    else:
+        packit_comment_command_prefix = "/packit"
+
+    handlers = MAP_CHECK_PREFIX_TO_HANDLER[commands[0]]
     if not handlers:
         logger.debug(
             f"Rerun for check with {
-                check_name_job} prefix not supported by packit.",
+                commands[0]} prefix not supported by packit.",
         )
     return handlers
 
@@ -249,6 +278,9 @@ class SteveJobs:
             if not processing_results:
                 # processing the jobs from the config
                 processing_results = self.process_jobs()
+
+        if isinstance(self.event, forgejo.issue.Comment):
+            processing_results = self.process_jobs()
 
         if processing_results is None:
             processing_results = [
@@ -378,6 +410,27 @@ class SteveJobs:
         Returns:
             List of the results of each task.
         """
+        # --- new_package command path ---
+        from packit_service.events.forgejo.issue import Comment as ForgejoIssueComment
+        if isinstance(self.event, ForgejoIssueComment):
+            handlers = self.get_handlers_for_event_new_package()
+            if not handlers:
+                return [
+                    TaskResults(
+                        success=True,
+                        details={"msg": "No new_package command handler found in the comment."},
+                    ),
+                ]
+            results = []
+            for handler_cls in handlers:
+                # For new_package, we may not have package_config/job_config, so pass None or minimal
+                handler = handler_cls(
+                    event=self.event.get_dict() if hasattr(self.event, 'get_dict') else self.event.__dict__
+                )
+                results.append(handler.run_job())
+            return results
+        # --- end new_package command path ---
+
         if isinstance(
             self.event,
             abstract.comment.CommentEvent,
@@ -537,25 +590,37 @@ class SteveJobs:
             or the check is skipped,
             `False` otherwise.
         """
+        # Skip the check for Forgejo issue comments
+        if isinstance(self.event, forgejo.issue.Comment):
+            return True
         # do the check only for events triggering the pipeline
         if isinstance(self.event, abstract.base.Result):
             logger.debug(
                 "Skipping private repository check for this type of event.")
 
         # CoprBuildEvent.get_project returns None when the build id is not known
-        elif not self.event.project:
+        elif not (self.event and hasattr(self.event, "project") and self.event.project):
             logger.warning(
                 "Cannot obtain project from this event! Skipping private repository check!",
             )
-        elif self.event.project.is_private():
+        # TODO: this is totally not OK and a lazy hack! need to check project type properly.
+        elif (
+            hasattr(self.event, "project")
+            and self.event.project
+            and hasattr(self.event.project, "is_private")
+            and self.event.project.is_private()
+            and hasattr(self.event.project, "service")
+            and self.event.project.service
+            and hasattr(self.event.project, "namespace")
+            and self.event.project.namespace
+        ):
             service_with_namespace = (
                 f"{self.event.project.service.hostname}/{self.event.project.namespace}"
             )
             if service_with_namespace not in self.service_config.enabled_private_namespaces:
                 logger.info(
                     f"We do not interact with private repositories by default. "
-                    f"Add `{
-                        service_with_namespace}` to the `enabled_private_namespaces` "
+                    f"Add `{service_with_namespace}` to the `enabled_private_namespaces` "
                     f"in the service configuration.",
                 )
                 return False
@@ -709,6 +774,33 @@ class SteveJobs:
             )
 
         return handlers_triggered_by_job
+
+    def get_handlers_for_comment_and_rerun_event_new_package(self) -> set[type[NewPackageHandler]]:
+        """
+        Get all handlers that can be triggered by new_package comment commands.
+        """
+        handlers_triggered_by_job = None
+        # You may want to define a specific event type for new_package comment events
+        # For now, let's assume it's a forgejo.issue.Comment with a new_package command
+        from packit_service.events.forgejo.issue import Comment as ForgejoIssueComment
+        if isinstance(self.event, ForgejoIssueComment):
+            handlers_triggered_by_job = get_handlers_for_comment_new_package(
+                self.event.comment,
+                self.service_config.comment_command_prefix,
+            )
+        return handlers_triggered_by_job or set()
+
+    def get_handlers_for_event_new_package(self) -> set[type[NewPackageHandler]]:
+        """
+        Get all handlers that we need to run for the given new_package event.
+        """
+        # For new_package, we don't have jobs_matching_trigger, just use the comment handler mapping
+        handlers_triggered_by_job = self.get_handlers_for_comment_and_rerun_event_new_package()
+        matching_handlers: set[type[NewPackageHandler]] = set()
+        for handler in handlers_triggered_by_job:
+            matching_handlers.add(handler)
+        logger.debug(f"Matching new_package handlers: {matching_handlers}")
+        return matching_handlers
 
     def get_handlers_for_event(self) -> set[type[JobHandler]]:
         """
