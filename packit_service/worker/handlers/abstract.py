@@ -59,7 +59,7 @@ MAP_COMMENT_TO_HANDLER_FEDORA_CI: dict[str,
                                        set[type["FedoraCIJobHandler"]]] = defaultdict(set)
 MAP_CHECK_PREFIX_TO_HANDLER: dict[str,
                                   set[type["JobHandler"]]] = defaultdict(set)
-
+MAP_COMMENT_TO_HANDLER_NEW_PACKAGE: dict[str, set[type["NewPackageHandler"]]] = defaultdict(set)
 
 def configured_as(job_type: JobType):
     """
@@ -213,6 +213,30 @@ def run_for_comment_as_fedora_ci(command: str):
     return _add_to_mapping
 
 
+def run_for_comment_new_package(command: str):
+    """
+    [class decorator]
+    Specify a command for which we want to run a handler for new_package comment commands.
+    e.g. for `/packit hello-world` we need to add `hello-world`
+
+    Multiple decorators are allowed.
+
+    Don't forget to specify valid comment events using @reacts_to_new_package decorator.
+
+    Example:
+    ```
+    @run_for_comment_new_package(command="hello-world")
+    @reacts_to_new_package(NewPackageEvent)
+    class HelloWorldHandler(NewPackageHandler):
+        ...
+    ```
+    """
+    def _add_to_mapping(kls: type["NewPackageHandler"]):
+        MAP_COMMENT_TO_HANDLER_NEW_PACKAGE[command].add(kls)
+        return kls
+    return _add_to_mapping
+
+
 def run_for_check_rerun(prefix: str):
     """
     [class decorator]
@@ -274,6 +298,7 @@ class TaskName(str, enum.Enum):
     downstream_koji_scratch_build = "task.run_downstream_koji_scratch_build_handler"
     downstream_koji_scratch_build_report = "task.run_downstream_koji_scratch_build_report_handler"
     new_package = "task.run_new_package_handler"
+    hello_world = "task.run_hello_world_handler"
 
 
 class Handler(PackitAPIProtocol, Config):
