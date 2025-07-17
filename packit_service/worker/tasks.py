@@ -293,19 +293,6 @@ def run_copr_build_handler(
     )
     return get_handlers_task_results(handler.run_job(), event)
 
-
-@celery_app.task(name="task.run_forgejo_new_pr_handler", base=TaskWithRetry)
-def run_forgejo_new_pr_handler(event: dict, package_config: dict, job_config: dict):
-    """Task for handling new Forgejo PR events without config dependencies"""
-    
-    handler = ForgejoNewPrHandler(
-        package_config=DUMMY_PACKAGE_CONFIG,
-        job_config=DUMMY_JOB_CONFIG,
-        event=event,
-    )
-    return get_handlers_task_results(handler.run_job(), event)
-
-
 def get_handlers_task_results(results: dict, event: dict) -> dict:
     # include original event to provide more info
     return {"job": results, "event": event}

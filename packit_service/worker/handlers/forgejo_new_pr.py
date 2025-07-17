@@ -11,10 +11,10 @@ from ogr.abstract import GitProject
 
 logger = logging.getLogger(__name__)
 
-@reacts_to(ForgejoPrAction)
+
 class ForgejoNewPrHandler(JobHandler):
-    task_name = TaskName.forgejo_new_pr
-    
+    # task_name = TaskName.forgejo_new_pr
+
     @property
     def service_config(self) -> Optional[ServiceConfig]:
         return ServiceConfig.get_service_config()
@@ -38,7 +38,8 @@ class ForgejoNewPrHandler(JobHandler):
         package_name = self.repo_name
         package_author = self.namespace
         package_version = str(random.randint(1000, 9999))
-        logger.info(f"ForgejoNewPrHandler: repo_url={repo_url}, package_name={package_name}, package_author={package_author}, package_version={package_version}")
+        logger.info(f"ForgejoNewPrHandler: repo_url={repo_url}, package_name={
+                    package_name}, package_author={package_author}, package_version={package_version}")
         return TaskResults(
             success=True,
             details={
@@ -48,7 +49,7 @@ class ForgejoNewPrHandler(JobHandler):
                 "package_author": package_author,
                 "package_version": package_version,
             },
-        ) 
+        )
 
     def get_package_name(self) -> Optional[str]:
         event = getattr(self.data, 'event_dict', None)

@@ -86,7 +86,8 @@ from packit_service.worker.result import TaskResults
 logger = logging.getLogger(__name__)
 
 
-MANUAL_OR_RESULT_EVENTS = [abstract.comment.CommentEvent, abstract.base.Result, github.check.Rerun]
+MANUAL_OR_RESULT_EVENTS = [
+    abstract.comment.CommentEvent, abstract.base.Result, github.check.Rerun]
 
 
 def get_handlers_for_comment(
@@ -103,7 +104,8 @@ def get_handlers_for_comment(
     Returns:
         Set of handlers that are triggered by a comment.
     """
-    commands = get_packit_commands_from_comment(comment, packit_comment_command_prefix)
+    commands = get_packit_commands_from_comment(
+        comment, packit_comment_command_prefix)
     if not commands:
         return set()
 
@@ -134,7 +136,8 @@ def get_handlers_for_comment_fedora_ci(
     else:
         packit_comment_command_prefix = "/packit-ci"
 
-    commands = get_packit_commands_from_comment(comment, packit_comment_command_prefix)
+    commands = get_packit_commands_from_comment(
+        comment, packit_comment_command_prefix)
     if not commands:
         return set()
 
@@ -157,7 +160,8 @@ def get_handlers_for_check_rerun(check_name_job: str) -> set[type[JobHandler]]:
     handlers = MAP_CHECK_PREFIX_TO_HANDLER[check_name_job]
     if not handlers:
         logger.debug(
-            f"Rerun for check with {check_name_job} prefix not supported by packit.",
+            f"Rerun for check with {
+                check_name_job} prefix not supported by packit.",
         )
     return handlers
 
@@ -209,7 +213,8 @@ class SteveJobs:
         elif pre_check_failed := not event_object.pre_check():
             steve.pushgateway.events_pre_check_failed.inc()
 
-        result = [] if (event_not_handled or pre_check_failed) else steve.process()
+        result = [] if (
+            event_not_handled or pre_check_failed) else steve.process()
 
         steve.pushgateway.push()
         return result
@@ -228,7 +233,8 @@ class SteveJobs:
         if (
                 isinstance(
                     self.event,
-                    (pagure.pr.Action, pagure.pr.Comment, koji.result.Task, testing_farm.Result),
+                    (pagure.pr.Action, pagure.pr.Comment,
+                     koji.result.Task, testing_farm.Result),
                 )
                 and self.event.db_project_object
                 and (url := self.event.db_project_object.project.project_url)
@@ -287,7 +293,8 @@ class SteveJobs:
             params["branches_override"] = self.event.branches_override
             return propose_downstream_helper(**params)
 
-        helper_kls: type[Union[TestingFarmJobHelper, CoprBuildJobHelper, KojiBuildJobHelper]]
+        helper_kls: type[Union[TestingFarmJobHelper,
+                               CoprBuildJobHelper, KojiBuildJobHelper]]
 
         if handler_kls == TestingFarmHandler:
             helper_kls = TestingFarmJobHelper
@@ -330,7 +337,8 @@ class SteveJobs:
                 RetriggerDownstreamKojiBuildHandler,
                 TagIntoSidetagHandler,
         ):
-            self.report_task_accepted_for_downstream_retrigger_comments(handler_kls)
+            self.report_task_accepted_for_downstream_retrigger_comments(
+                handler_kls)
         if handler_kls not in (
                 CoprBuildHandler,
                 KojiBuildHandler,
@@ -453,23 +461,26 @@ class SteveJobs:
                 return True
 
             # let's treat GitLab MR comments special and parse package name from comment
+            package_name = "example_package"  # default fallback
+            specfile_path = None
+
             if isinstance(self.event, gitlab.mr.Comment):
                 package_name = "example_package"  # default fallback
-                specfile_path = None  # pray for it to succeed
-                
+                specfile_path = None
+
                 if self.event.comment:
                     comment_lines = self.event.comment.strip().split('\n')
                     for line in comment_lines:
                         line = line.strip()
-                        if line.startswith('package_name:'):
-                            parts = line.split(':', 1)
+                        if 'package_name:' in line:
+                            parts = line.split('package_name:', 1)
                             if len(parts) == 2:
                                 extracted_name = parts[1].strip()
                                 if extracted_name:
                                     package_name = extracted_name
                                     specfile_path = f"{extracted_name}.spec"
                                     break
-                
+
                 self.event._package_config = PackageConfig(
                     packages={
                         package_name: CommonPackageConfig(
@@ -516,11 +527,12 @@ class SteveJobs:
             handler
             for handler, supported_events in SUPPORTED_EVENTS_FOR_HANDLER_FEDORA_CI.items()
             if isinstance(self.event, tuple(supported_events))
-               and (handlers_triggered_by_job is None or handler in handlers_triggered_by_job)
+            and (handlers_triggered_by_job is None or handler in handlers_triggered_by_job)
         }
 
         if not matching_handlers:
-            logger.debug(f"No handler found for event {self.event} for Fedora CI.")
+            logger.debug(f"No handler found for event {
+                         self.event} for Fedora CI.")
             return []
 
         # TODO: add allowlist checks here
@@ -597,7 +609,8 @@ class SteveJobs:
 
         if not handler_classes:
             logger.debug(
-                f"There is no handler for {self.event} event suitable for the configuration.",
+                f"There is no handler for {
+                    self.event} event suitable for the configuration.",
             )
             return []
 
@@ -612,7 +625,8 @@ class SteveJobs:
             )
 
             processing_results.extend(
-                self.create_tasks(job_configs, handler_kls, statuses_check_feedback),
+                self.create_tasks(job_configs, handler_kls,
+                                  statuses_check_feedback),
             )
         self.push_statuses_metrics(statuses_check_feedback)
 
@@ -642,7 +656,8 @@ class SteveJobs:
                 self.report_task_accepted(
                     handler_kls=handler_kls,
                     job_config=job_config,
-                    update_feedback_time=lambda t: statuses_check_feedback.append(t),
+                    update_feedback_time=lambda t: statuses_check_feedback.append(
+                        t),
                 )
                 if handler_kls in (
                         CoprBuildHandler,
@@ -652,10 +667,12 @@ class SteveJobs:
                     self.event.store_packages_config()
 
                 signatures.append(
-                    handler_kls.get_signature(event=self.event, job=job_config),
+                    handler_kls.get_signature(
+                        event=self.event, job=job_config),
                 )
                 logger.debug(
-                    f"Got signature for handler={handler_kls} and job_config={job_config}.",
+                    f"Got signature for handler={
+                        handler_kls} and job_config={job_config}.",
                 )
                 processing_results.append(
                     TaskResults.create_from(
@@ -709,7 +726,8 @@ class SteveJobs:
         """
         # do the check only for events triggering the pipeline
         if isinstance(self.event, abstract.base.Result):
-            logger.debug("Skipping private repository check for this type of event.")
+            logger.debug(
+                "Skipping private repository check for this type of event.")
 
         # CoprBuildEvent.get_project returns None when the build id is not known
         elif not self.event.project:
@@ -818,25 +836,25 @@ class SteveJobs:
                     and (
                     not isinstance(self.event, github.check.Rerun)
                     or self.event.job_identifier == job.identifier
-            )
+                    )
                     and job not in jobs_matching_trigger
                     # Manual trigger condition
                     and (
                     not job.manual_trigger
                     or any(
-                isinstance(self.event, event_type) for event_type in MANUAL_OR_RESULT_EVENTS
-            )
-            )
+                        isinstance(self.event, event_type) for event_type in MANUAL_OR_RESULT_EVENTS
+                    )
+                    )
                     and (
                     job.trigger != JobConfigTriggerType.pull_request
                     or not (job.require.label.present or job.require.label.absent)
                     or not isinstance(self.event, abstract.base.ForgeIndependent)
                     or pr_labels_match_configuration(
-                pull_request=self.event.pull_request_object,
-                configured_labels_absent=job.require.label.absent,
-                configured_labels_present=job.require.label.present,
-            )
-            )
+                        pull_request=self.event.pull_request_object,
+                        configured_labels_absent=job.require.label.absent,
+                        configured_labels_present=job.require.label.present,
+                    )
+                    )
             ):
                 jobs_matching_trigger.append(job)
 
@@ -908,7 +926,8 @@ class SteveJobs:
 
         if not matching_handlers:
             logger.debug(
-                f"We did not find any handler for a following event:\n{self.event.event_type()}",
+                f"We did not find any handler for a following event:\n{
+                    self.event.event_type()}",
             )
 
         logger.debug(f"Matching handlers: {matching_handlers}")
@@ -933,12 +952,13 @@ class SteveJobs:
             `True` if handler matches the event, `False` otherwise.
         """
         handler_matches_to_comment_or_check_rerun_job = (
-                allowed_handlers is None or handler in allowed_handlers
+            allowed_handlers is None or handler in allowed_handlers
         )
 
         return (
-                isinstance(self.event, tuple(SUPPORTED_EVENTS_FOR_HANDLER[handler]))
-                and handler_matches_to_comment_or_check_rerun_job
+            isinstance(self.event, tuple(
+                SUPPORTED_EVENTS_FOR_HANDLER[handler]))
+            and handler_matches_to_comment_or_check_rerun_job
         )
 
     def get_config_for_handler_kls(
@@ -983,7 +1003,8 @@ class SteveJobs:
 
         if not matching_jobs:
             logger.warning(
-                f"We did not find any config for {handler_kls} and a following event:\n"
+                f"We did not find any config for {
+                    handler_kls} and a following event:\n"
                 f"{self.event.event_type()}",
             )
 
@@ -1014,7 +1035,8 @@ class SteveJobs:
             end=statuses_check_feedback[0],
         )
         logger.debug(
-            f"Reporting first initial status check time: {response_time} seconds.",
+            f"Reporting first initial status check time: {
+                response_time} seconds.",
         )
         self.pushgateway.first_initial_status_time.observe(response_time)
         if response_time > 25:
@@ -1024,7 +1046,8 @@ class SteveJobs:
             # we need more info why this has happened
             logger.debug(f"Event dict: {self.event}.")
             logger.error(
-                f"Event {self.event.event_type()} took more than 15s to process.",
+                f"Event {self.event.event_type(
+                )} took more than 15s to process.",
             )
         # set the time when the accepted status was set so that we
         # can use it later for measurements
@@ -1035,7 +1058,8 @@ class SteveJobs:
             end=statuses_check_feedback[-1],
         )
         logger.debug(
-            f"Reporting last initial status check time: {response_time} seconds.",
+            f"Reporting last initial status check time: {
+                response_time} seconds.",
         )
         self.pushgateway.last_initial_status_time.observe(response_time)
 
@@ -1093,7 +1117,8 @@ class SteveJobs:
 
         message = (
             f"{TASK_ACCEPTED} "
-            f"{handler_kls.get_handler_specific_task_accepted_message(self.service_config)}"
+            f"{handler_kls.get_handler_specific_task_accepted_message(
+                self.service_config)}"
         )
 
         if isinstance(self.event, abstract.comment.PullRequest):
