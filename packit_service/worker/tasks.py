@@ -64,7 +64,6 @@ from packit_service.worker.handlers import (
     VMImageBuildHandler,
     VMImageBuildResultHandler,
 )
-from packit_service.worker.handlers.new_package import NewPackageRepositoryHandler
 from packit_service.worker.handlers.abstract import TaskName
 from packit_service.worker.handlers.bodhi import (
     BodhiUpdateFromSidetagHandler,
@@ -86,6 +85,7 @@ from packit_service.worker.handlers.koji import (
     KojiTaskReportDownstreamHandler,
 )
 from packit_service.worker.handlers.usage import check_onboarded_projects
+from packit_service.worker.handlers.forgejo_new_pr import ForgejoNewPrHandler
 from packit_service.worker.helpers.build.babysit import (
     check_copr_build,
     check_pending_copr_builds,
@@ -93,8 +93,18 @@ from packit_service.worker.helpers.build.babysit import (
     check_pending_vm_image_builds,
     update_vm_image_build,
 )
-from packit_service.worker.jobs import SteveJobs
 from packit_service.worker.result import TaskResults
+from packit_service.worker.jobs import SteveJobs
+from packit.config import PackageConfig, JobConfig, JobType, JobConfigTriggerType
+from packit.config.common_package_config import CommonPackageConfig
+
+dummy_common_package = CommonPackageConfig()
+DUMMY_PACKAGE_CONFIG = PackageConfig(packages={"dummy": dummy_common_package})
+DUMMY_JOB_CONFIG = JobConfig(
+    type=JobType.copr_build,
+    trigger=JobConfigTriggerType.commit,
+    packages={"dummy": dummy_common_package}
+)
 
 logger = logging.getLogger(__name__)
 
@@ -280,6 +290,18 @@ def run_copr_build_handler(
         event=event,
         celery_task=self,
         copr_build_group_id=copr_build_group_id,
+    )
+    return get_handlers_task_results(handler.run_job(), event)
+
+
+@celery_app.task(name="task.run_forgejo_new_pr_handler", base=TaskWithRetry)
+def run_forgejo_new_pr_handler(event: dict, package_config: dict, job_config: dict):
+    """Task for handling new Forgejo PR events without config dependencies"""
+    
+    handler = ForgejoNewPrHandler(
+        package_config=DUMMY_PACKAGE_CONFIG,
+        job_config=DUMMY_JOB_CONFIG,
+        event=event,
     )
     return get_handlers_task_results(handler.run_job(), event)
 

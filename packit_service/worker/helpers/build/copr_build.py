@@ -119,8 +119,10 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
         * replace slash in namespace with dash
         """
 
-        service_hostname = parse_git_repo(self.project.service.instance_url).hostname
-        service_prefix = "" if isinstance(self.project, GithubProject) else f"{service_hostname}-"
+        service_hostname = parse_git_repo(
+            self.project.service.instance_url).hostname
+        service_prefix = "" if isinstance(self.project, GithubProject) else f"{
+            service_hostname}-"
 
         namespace = self.project.namespace.replace("/", "-")
         # We want to share project between all releases.
@@ -180,8 +182,10 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
         if job_config.project:
             return job_config.project
 
-        service_hostname = parse_git_repo(self.project.service.instance_url).hostname
-        service_prefix = "" if isinstance(self.project, GithubProject) else f"{service_hostname}-"
+        service_hostname = parse_git_repo(
+            self.project.service.instance_url).hostname
+        service_prefix = "" if isinstance(self.project, GithubProject) else f"{
+            service_hostname}-"
 
         namespace = self.project.namespace.replace("/", "-")
 
@@ -331,7 +335,8 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
         )
 
         if configured_distros:
-            distro_arch_list = [(distro, arch) for distro in configured_distros]
+            distro_arch_list = [(distro, arch)
+                                for distro in configured_distros]
         else:
             mapping = (
                 DEFAULT_MAPPING_INTERNAL_TF
@@ -357,7 +362,8 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
                 target,
                 test_job_config,
             ):
-                logger.debug(f"Build target corresponding to {test_target}: {target}")
+                logger.debug(f"Build target corresponding to {
+                             test_target}: {target}")
                 return target
 
         return test_target
@@ -376,7 +382,8 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
 
     def is_custom_copr_project_defined(self) -> bool:
         return (
-            self.job_owner != self.api.copr_helper.copr_client.config.get("username")
+            self.job_owner != self.api.copr_helper.copr_client.config.get(
+                "username")
             or self.job_project != self.default_project_name
         )
 
@@ -499,11 +506,13 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
         if isinstance(self.project, GitlabProject):
             build_description = test_description = "Job is in progress..."
             url_for_build = web_url
-            url_for_tests = f"{self.service_config.dashboard_url}{DASHBOARD_JOBS_TESTING_FARM_PATH}"
+            url_for_tests = f"{self.service_config.dashboard_url}{
+                DASHBOARD_JOBS_TESTING_FARM_PATH}"
         else:
             build_description = "SRPM build in Copr was submitted..."
             test_description = "Waiting for RPMs to be built..."
-            url_for_build = url_for_tests = get_srpm_build_info_url(self.srpm_model.id)
+            url_for_build = url_for_tests = get_srpm_build_info_url(
+                self.srpm_model.id)
 
         self.report_status_to_build(
             description=build_description,
@@ -545,7 +554,8 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
                 merged_ref = self.metadata.tag_name
             else:
                 logger.warning(
-                    f"Unable to determine merged ref for {self.job_config.trigger}",
+                    f"Unable to determine merged ref for {
+                        self.job_config.trigger}",
                 )
                 merged_ref = None
 
@@ -593,7 +603,8 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
                     url=get_srpm_build_info_url(self.srpm_model.id),
                     chroot=chroot,
                 )
-                self.monitor_not_submitted_copr_builds(1, "not_supported_target")
+                self.monitor_not_submitted_copr_builds(
+                    1, "not_supported_target")
                 unprocessed_chroots.append(chroot)
                 continue
 
@@ -665,7 +676,8 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
                     # use the latest stable chroot
                     script_repos=self.get_packit_copr(),
                     script_chroot=self.get_latest_fedora_stable_chroot(),
-                    script_builddeps=["packit"] + (self.job_config.srpm_build_deps or []),
+                    script_builddeps=["packit"] +
+                    (self.job_config.srpm_build_deps or []),
                     buildopts=buildopts,
                 )
             else:
@@ -732,7 +744,8 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
             result of the task saying whether the task was retried
         """
         possible_copr_outage_exc = (
-            isinstance(ex, CoprRequestException) and "Unable to connect" in str(ex)
+            isinstance(
+                ex, CoprRequestException) and "Unable to connect" in str(ex)
         ) or isinstance(ex, CoprTimeoutException)
         forge_outage_exc = isinstance(ex, OgrNetworkError)
         forge_internal_error = isinstance(ex, GitForgeInternalError)
@@ -751,7 +764,8 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
             else:
                 # Outages are delayed in minutes
                 interval = BASE_RETRY_INTERVAL_IN_MINUTES_FOR_OUTAGES * 2**self.celery_task.retries
-                retry_in = f"{interval} {'minute' if interval == 1 else 'minutes'}"
+                retry_in = f"{interval} {
+                    'minute' if interval == 1 else 'minutes'}"
                 delay = 60 * interval
                 max_retries = DEFAULT_RETRY_LIMIT_OUTAGE
 
@@ -762,7 +776,8 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
             )
             report_status(
                 state=BaseCommitStatus.pending,
-                description=f"Submit of the build failed due to a {what_failed} error, the task "
+                description=f"Submit of the build failed due to a {
+                    what_failed} error, the task "
                 f"will be retried in {retry_in}.",
             )
             # Set status
@@ -927,11 +942,13 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
             chroots_diff = ""
             if "chroots" in ex.fields_to_change:
                 old_chroots, new_chroots = ex.fields_to_change["chroots"]
-                chroots_diff = self._visualize_chroots_diff(old_chroots, new_chroots)
+                chroots_diff = self._visualize_chroots_diff(
+                    old_chroots, new_chroots)
 
             if owner == self.service_config.fas_user:
                 # the problem is on our side and user cannot fix it
-                self._report_copr_chroot_change_problem(owner, chroots_diff, table)
+                self._report_copr_chroot_change_problem(
+                    owner, chroots_diff, table)
                 raise ex
 
             boolean_note = ""
@@ -971,11 +988,13 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
                 f"{boolean_note}"
                 "\n"
                 "Packit was unable to update the settings above as it is missing `admin` "
-                f"permissions on the {owner}/{self.job_project} Copr project.\n"
+                f"permissions on the {
+                    owner}/{self.job_project} Copr project.\n"
                 "\n"
                 "To fix this you can do one of the following:\n"
                 "\n"
-                f"- Grant Packit `admin` permissions on the {owner}/{self.job_project} "
+                f"- Grant Packit `admin` permissions on the {
+                    owner}/{self.job_project} "
                 f"Copr project on the [permissions page]({permissions_url}).\n"
                 "- Change the above Copr project settings manually "
                 f"on the [settings page]({settings_url}) "

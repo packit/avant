@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: MIT
 
 """
-Hello World command handler for demonstrating the packit-service handler architecture.
+Hello World command handler for demonstrating the packit-service handlers.
 """
 
 import logging
-from typing import Optional
 
 from packit_service.events.forgejo.issue import Comment as ForgejoIssueComment
+from packit_service.events.forgejo.pr import Comment as ForgejoPRComment
 from packit_service.worker.handlers.abstract import (
     NewPackageHandler,
     TaskName,
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 @run_for_comment_new_package(command="hello-world")
 @reacts_to_new_package(ForgejoIssueComment)
+@reacts_to_new_package(ForgejoPRComment)
 class HelloWorldNewPackageHandler(NewPackageHandler):
     """
     A simple hello-world handler that demonstrates the basic structure 
@@ -61,23 +62,23 @@ class HelloWorldNewPackageHandler(NewPackageHandler):
             TaskResults: Result of the hello-world operation
         """
         try:
-            logger.info("🌟 Hello World handler started!")
-            logger.info(f"📝 Comment: {self.comment}")
-            logger.info(f"👤 Actor: {self.actor}")
-            logger.info(f"🎫 Issue ID: {self.issue_id}")
+            logger.info("Hello World handler started!")
+            logger.info(f"Comment: {self.comment}")
+            logger.info(f"Actor: {self.actor}")
+            logger.info(f"Issue ID: {self.issue_id}")
             
             # Simulate some work
             greeting_message = f"Hello, {self.actor}! 👋"
-            logger.info(f"✨ {greeting_message}")
+            logger.info(f"{greeting_message}")
             
             # Log some system information for demonstration
-            logger.info("🔧 Hello World handler is working correctly!")
-            logger.info("📊 System status: All good!")
+            logger.info("Hello World handler is working correctly!")
+            logger.info("System status: All good!")
             
             return TaskResults(
                 success=True,
                 details={
-                    "msg": "Hello World command executed successfully! 🎉",
+                    "msg": "Hello World command executed successfully!",
                     "greeting": greeting_message,
                     "actor": self.actor,
                     "issue_id": self.issue_id,
@@ -88,7 +89,7 @@ class HelloWorldNewPackageHandler(NewPackageHandler):
             
         except Exception as e:
             error_msg = f"Hello World handler failed: {str(e)}"
-            logger.error(f"❌ {error_msg}")
+            logger.error(f"{error_msg}")
             
             return TaskResults(
                 success=False,
@@ -108,10 +109,10 @@ class HelloWorldNewPackageHandler(NewPackageHandler):
         Returns:
             Dict containing the job results
         """
-        logger.info("🚀 Starting Hello World job...")
+        logger.info("Starting Hello World job...")
         result = self.run()
         # TaskResults behaves like a dict, so we access success as a key
-        logger.info(f"✅ Hello World job completed with success: {result['success']}")
+        logger.info(f"Hello World job completed with success: {result['success']}")
         
         return {
             "hello-world": result

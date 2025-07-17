@@ -34,7 +34,8 @@ class only_once:
 
     def __call__(self, *args, **kwargs):
         if self.configured:
-            logger.debug(f"Function {self.func.__name__} already called. Skipping.")
+            logger.debug(
+                f"Function {self.func.__name__} already called. Skipping.")
             return None
 
         self.configured = True
@@ -47,7 +48,8 @@ class only_once:
 
 # wrappers for dumping/loading of configs
 def load_package_config(package_config: dict):
-    package_config_obj = PackageConfigSchema().load(package_config) if package_config else None
+    package_config_obj = PackageConfigSchema().load(
+        package_config) if package_config else None
     return PackageConfig.post_load(package_config_obj)
 
 
@@ -78,7 +80,8 @@ def get_package_nvrs(built_packages: list[dict]) -> list[str]:
         epoch = f"{package['epoch']}:" if package["epoch"] else ""
 
         packages.append(
-            f"{package['name']}-{epoch}{package['version']}-{package['release']}.{package['arch']}",
+            f"{package['name']}-{epoch}{package['version']
+                                        }-{package['release']}.{package['arch']}",
         )
     return packages
 
@@ -249,7 +252,8 @@ def pr_labels_match_configuration(
     logger.info(
         f"About to check whether PR labels in PR {pull_request.id} "
         f"match to the labels configuration "
-        f"(label.present: {configured_labels_present}, label.absent: {configured_labels_absent})",
+        f"(label.present: {configured_labels_present}, label.absent: {
+            configured_labels_absent})",
     )
 
     pr_labels = [label.name for label in pull_request.labels]
@@ -274,7 +278,8 @@ def download_file(url: str, path: Path):
     # TODO: use a library to make the downloads more robust (e.g. pycurl),
     # unify with packit code:
     # https://github.com/packit/packit/blob/2e75e6ff4c0cadb55da1c8daf9315e4b0a69e4a8/packit/base_git.py#L566-L583
-    user_agent = os.getenv("PACKIT_USER_AGENT") or f"packit-service/{ps_version} (hello@packit.dev)"
+    user_agent = os.getenv(
+        "PACKIT_USER_AGENT") or f"packit-service/{ps_version} (hello@packit.dev)"
     try:
         with requests.get(
             url,
@@ -293,3 +298,7 @@ def download_file(url: str, path: Path):
         return False
 
     return True
+
+
+def create_new_forgejo_project_for_package(namespace: str, package_name: str):
+    pass

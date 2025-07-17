@@ -44,13 +44,12 @@ from packit_service.worker.handlers.vm_image import (
     VMImageBuildHandler,
     VMImageBuildResultHandler,
 )
-from packit_service.worker.handlers.new_package import (
-    NewPackageRepositoryHandler,
-)
 from packit_service.worker.handlers.hello_world import (
     HelloWorldNewPackageHandler,
 )
-
+from packit_service.worker.handlers.forgejo_new_pr import (
+    ForgejoNewPrHandler,
+)
 __all__ = [
     Handler.__name__,
     JobHandler.__name__,
@@ -71,6 +70,6 @@ __all__ = [
     VMImageBuildResultHandler.__name__,
     CoprOpenScanHubTaskFinishedHandler.__name__,
     CoprOpenScanHubTaskStartedHandler.__name__,
-    NewPackageRepositoryHandler.__name__,
     HelloWorldNewPackageHandler.__name__,
+    ForgejoNewPrHandler.__name__,
 ]

@@ -73,15 +73,15 @@ class _GitlabCommonData:
 
     @property
     def commit_sha(self) -> str:
-        return self.head_commit.get("id")
+        return str(self.head_commit.get("id") or "")
 
     @property
     def commit_title(self) -> str:
-        return self.head_commit.get("title")
+        return str(self.head_commit.get("title") or "")
 
     @property
     def commit_message(self) -> str:
-        return self.head_commit.get("message")
+        return str(self.head_commit.get("message") or "")
 
 
 @dataclass
@@ -143,6 +143,7 @@ class Parser:
             vm_image.Result,
             forgejo.push.Commit,
             forgejo.issue.Comment,
+            forgejo.pr.Action
         ]
     ]:
         """
@@ -195,6 +196,7 @@ class Parser:
                 Parser.parse_pagure_pull_request_event,
                 Parser.parse_new_package_event,
                 Parser.parse_forgejo_comment_event,
+                Parser.parse_forgejo_pr_event
             )
         ):
             if response:
@@ -252,8 +254,8 @@ class Parser:
         logger.info(
             f"Source: "
             f"url={source_project_url} "
-            f"namespace={parsed_source_url.namespace} "
-            f"repo={parsed_source_url.repo} "
+            f"namespace={parsed_source_url.namespace if parsed_source_url else ''} "
+            f"repo={parsed_source_url.repo if parsed_source_url else ''} "
             f"branch={source_repo_branch}.",
         )
 
@@ -266,8 +268,8 @@ class Parser:
         logger.info(
             f"Target: "
             f"url={target_project_url} "
-            f"namespace={parsed_target_url.namespace} "
-            f"repo={parsed_target_url.repo} "
+            f"namespace={parsed_target_url.namespace if parsed_target_url else ''} "
+            f"repo={parsed_target_url.repo if parsed_target_url else ''} "
             f"branch={target_repo_branch}.",
         )
 
@@ -283,12 +285,12 @@ class Parser:
             actor=actor,
             object_id=object_id,
             object_iid=object_iid,
-            source_repo_namespace=parsed_source_url.namespace,
-            source_repo_name=parsed_source_url.repo,
+            source_repo_namespace=str(parsed_source_url.namespace) if parsed_source_url and parsed_source_url.namespace else "",
+            source_repo_name=str(parsed_source_url.repo) if parsed_source_url and parsed_source_url.repo else "",
             source_repo_branch=source_repo_branch,
             source_project_url=source_project_url,
-            target_repo_namespace=parsed_target_url.namespace,
-            target_repo_name=parsed_target_url.repo,
+            target_repo_namespace=str(parsed_target_url.namespace) if parsed_target_url and parsed_target_url.namespace else "",
+            target_repo_name=str(parsed_target_url.repo) if parsed_target_url and parsed_target_url.repo else "",
             target_repo_branch=target_repo_branch,
             project_url=target_project_url,
             commit_sha=commit_sha,
@@ -388,15 +390,15 @@ class Parser:
 
         logger.info(
             f"Gitlab release with tag {tag_name} event on Project: "
-            f"repo={parsed_url.repo} "
-            f"namespace={parsed_url.namespace} "
+            f"repo={parsed_url.repo if parsed_url else ''} "
+            f"namespace={parsed_url.namespace if parsed_url else ''} "
             f"url={project_url}.",
         )
         commit_sha = nested_get(event, "commit", "id")
 
         return gitlab.release.Release(
-            repo_namespace=parsed_url.namespace,
-            repo_name=parsed_url.repo,
+            repo_namespace=str(parsed_url.namespace) if parsed_url and parsed_url.namespace else "",
+            repo_name=str(parsed_url.repo) if parsed_url and parsed_url.repo else "",
             project_url=project_url,
             tag_name=tag_name,
             git_ref=tag_name,
@@ -497,14 +499,14 @@ class Parser:
         logger.info(
             f"Gitlab tag push {data.ref} event with commit_sha {data.head_commit.get('id')} "
             f"by actor {data.actor} on Project: "
-            f"repo={data.parsed_url.repo} "
-            f"namespace={data.parsed_url.namespace} "
+            f"repo={data.parsed_url.repo if data.parsed_url else ''} "
+            f"namespace={data.parsed_url.namespace if data.parsed_url else ''} "
             f"url={data.project_url}.",
         )
 
         return gitlab.push.Tag(
-            repo_namespace=data.parsed_url.namespace,
-            repo_name=data.parsed_url.repo,
+            repo_namespace=str(data.parsed_url.namespace) if data.parsed_url and data.parsed_url.namespace else "",
+            repo_name=str(data.parsed_url.repo) if data.parsed_url and data.parsed_url.repo else "",
             actor=data.actor,
             git_ref=data.ref,
             project_url=data.project_url,
@@ -530,8 +532,8 @@ class Parser:
             return None
 
         return gitlab.push.Commit(
-            repo_namespace=data.parsed_url.namespace,
-            repo_name=data.parsed_url.repo,
+            repo_namespace=str(data.parsed_url.namespace) if data.parsed_url and data.parsed_url.namespace else "",
+            repo_name=str(data.parsed_url.repo) if data.parsed_url and data.parsed_url.repo else "",
             git_ref=data.ref,
             project_url=data.project_url,
             commit_sha=data.commit_sha,
@@ -644,6 +646,58 @@ class Parser:
         )
 
     @staticmethod
+    def parse_forgejo_pr_event(event) -> Optional[forgejo.pr.Action]:
+        """
+        Parse Forgejo PR action events, only triggering for relevant actions.
+        Supported actions: 'opened', 'reopened', 'synchronize'.
+        Skips others like 'closed'.
+        """
+        action_str = event.get("action")
+        # Only trigger for these actions
+        supported_actions = {"opened", "reopened", "synchronize"}
+        if action_str not in supported_actions:
+            logger.info(f"Skipping PR action: {action_str}")
+            return None
+
+        pr = event.get("pull_request")
+        if not pr:
+            logger.warning("No pull_request in event.")
+            return None
+
+        pr_id = pr.get("number")
+        actor = event.get("sender", {}).get("login")
+        repo = event.get("repository", {})
+        base = pr.get("base")
+        head = pr.get("head")
+
+        # Check all required nested fields
+        try:
+            base_repo_namespace = base["repo"]["owner"]["login"]
+            base_repo_name = base["repo"]["name"]
+            base_ref = base["ref"]
+            target_repo_namespace = head["repo"]["owner"]["login"]
+            target_repo_name = head["repo"]["name"]
+            project_url = repo["html_url"]
+            commit_sha = head["sha"]
+        except (TypeError, KeyError):
+            logger.warning("Missing required nested fields in PR event.")
+            return None
+
+        return forgejo.pr.Action(
+            action=PullRequestAction[action_str],
+            pr_id=pr_id,
+            base_repo_namespace=base_repo_namespace,
+            base_repo_name=base_repo_name,
+            base_ref=base_ref,
+            target_repo_namespace=target_repo_namespace,
+            target_repo_name=target_repo_name,
+            project_url=project_url,
+            commit_sha=commit_sha,
+            commit_sha_before=event.get("before", ""),  # Optional, might be empty
+            actor=actor,
+        )
+
+    @staticmethod
     def parse_github_comment_event(
         event,
     ) -> Optional[Union[github.pr.Comment, github.issue.Comment]]:
@@ -655,57 +709,78 @@ class Parser:
         return Parser.parse_issue_comment_event(event)
 
     @staticmethod
-    def parse_forgejo_comment_event(
-        event,
-    ) -> Optional[forgejo.issue.Comment]:
-        """Look into the provided event and see if it is Forgejo issue or PR comment event."""
-        # Remove the check that blocks issue comments
-        # Accept both issue and PR comments (PR comments will have 'pull_request' not None)
-        # For now, parse both the same way, as Forgejo's payload is similar for both
-        # TODO: clean this up and make it actually usable.
+    def parse_forgejo_comment_event(event: dict) -> Optional[Union[forgejo.pr.Comment, forgejo.issue.Comment]]:
+        """Since Forgejo treats PR as special issues the comments are basically on issues,
+        we need to distinguish between Forgejo issue and PR comments and parse accordingly."""
+
         issue_id = nested_get(event, "issue", "number")
         action = event.get("action")
         if action not in {"created", "edited"} or not issue_id:
             return None
 
+        # Only treat as PR if 'pull_request' is present and not None
+        issue_dict = event.get("issue", {})
+        is_pr = "pull_request" in issue_dict and issue_dict["pull_request"] is not None
+
         comment = nested_get(event, "comment", "body")
         comment_id = nested_get(event, "comment", "id")
-        logger.info(f"Forgejo issue#{issue_id} comment: {comment!r} id#{comment_id} {action!r} event.")
+        logger.info(
+            f"Forgejo {'PR' if is_pr else 'issue'}#{issue_id} comment: {comment!r} id#{comment_id} {action!r} event."
+        )
 
-        # For both issue and PR comments, the repo info is under 'repository'
         base_repo_namespace = nested_get(event, "issue", "user", "login")
         base_repo_name = nested_get(event, "repository", "name")
-        if not (base_repo_name and base_repo_namespace):
-            logger.warning("No full name of the repository.")
-            return None
 
         user_login = nested_get(event, "comment", "user", "login")
-        if not user_login:
-            logger.warning("No Forgejo login name from event.")
-            return None
-
         target_repo_namespace = nested_get(event, "repository", "owner", "login")
         target_repo_name = nested_get(event, "repository", "name")
-        if not (target_repo_name and target_repo_namespace):
-            logger.warning("No full name of the repository.")
+        https_url = nested_get(event, "repository", "html_url")
+
+        if not (base_repo_name and base_repo_namespace and target_repo_name and target_repo_namespace):
+            logger.warning("Missing repo info in Forgejo event.")
             return None
-        
-        https_url = event["repository"]["html_url"]
-        return forgejo.issue.Comment(
-            action=IssueCommentAction[action],
-            issue_id=issue_id,
-            repo_namespace=base_repo_namespace,
-            repo_name=base_repo_name,
-            target_repo=f"{target_repo_namespace}/{target_repo_name}",
+
+        if not user_login:
+            logger.warning("No user login in comment.")
+            return None
+
+        kwargs = dict(
+            pr_id=issue_id,
+            base_repo_namespace=base_repo_namespace,
+            base_repo_name=base_repo_name,
+            base_ref="",
+            target_repo_namespace=target_repo_namespace,
+            target_repo_name=target_repo_name,
             project_url=https_url,
             actor=user_login,
             comment=comment,
             comment_id=comment_id,
-            tag_name="",
-            base_ref="",
             comment_object=None,
-            dist_git_project_url=None,
+            commit_sha=None,
         )
+
+        if is_pr:
+            return forgejo.pr.Comment(
+                action=PullRequestCommentAction[action],
+                **kwargs,
+            )
+        else:
+            return forgejo.issue.Comment(
+                action=IssueCommentAction[action],
+                issue_id=issue_id,
+                repo_namespace=base_repo_namespace,
+                repo_name=base_repo_name,
+                target_repo=f"{target_repo_namespace}/{target_repo_name}",
+                project_url=https_url,
+                actor=user_login,
+                comment=comment,
+                comment_id=comment_id,
+                tag_name="",
+                base_ref="",
+                comment_object=None,
+                dist_git_project_url=None,
+            )
+
 
     @staticmethod
     def parse_pull_request_comment_event(
@@ -905,7 +980,7 @@ class Parser:
             return None
         parsed_url = parse_git_repo(potential_url=project_url)
         logger.info(
-            f"Project: repo={parsed_url.repo} namespace={parsed_url.namespace} url={project_url}.",
+            f"Project: repo={parsed_url.repo if parsed_url else ''} namespace={parsed_url.namespace if parsed_url else ''} url={project_url}.",
         )
 
         actor = nested_get(event, "user", "username")
@@ -916,8 +991,8 @@ class Parser:
         return gitlab.issue.Comment(
             action=gitlab.enums.Action[action],
             issue_id=issue_id,
-            repo_namespace=parsed_url.namespace,
-            repo_name=parsed_url.repo,
+            repo_namespace=str(parsed_url.namespace) if parsed_url and parsed_url.namespace else "",
+            repo_name=str(parsed_url.repo) if parsed_url and parsed_url.repo else "",
             project_url=project_url,
             actor=actor,
             comment=comment,
@@ -966,8 +1041,8 @@ class Parser:
         parsed_source_url = parse_git_repo(potential_url=source_project_url)
         logger.info(
             f"Source: "
-            f"repo={parsed_source_url.repo} "
-            f"namespace={parsed_source_url.namespace} "
+            f"repo={parsed_source_url.repo if parsed_source_url else ''} "
+            f"namespace={parsed_source_url.namespace if parsed_source_url else ''} "
             f"url={source_project_url}.",
         )
 
@@ -978,8 +1053,8 @@ class Parser:
         parsed_target_url = parse_git_repo(potential_url=target_project_url)
         logger.info(
             f"Target: "
-            f"repo={parsed_target_url.repo} "
-            f"namespace={parsed_target_url.namespace} "
+            f"repo={parsed_target_url.repo if parsed_target_url else ''} "
+            f"namespace={parsed_target_url.namespace if parsed_target_url else ''} "
             f"url={target_project_url}.",
         )
 
@@ -1001,10 +1076,10 @@ class Parser:
             action=gitlab.enums.Action[action],
             object_id=object_id,
             object_iid=object_iid,
-            source_repo_namespace=parsed_source_url.namespace,
-            source_repo_name=parsed_source_url.repo,
-            target_repo_namespace=parsed_target_url.namespace,
-            target_repo_name=parsed_target_url.repo,
+            source_repo_namespace=str(parsed_source_url.namespace) if parsed_source_url and parsed_source_url.namespace else "",
+            source_repo_name=str(parsed_source_url.repo) if parsed_source_url and parsed_source_url.repo else "",
+            target_repo_namespace=str(parsed_target_url.namespace) if parsed_target_url and parsed_target_url.namespace else "",
+            target_repo_name=str(parsed_target_url.repo) if parsed_target_url and parsed_target_url.repo else "",
             project_url=target_project_url,
             actor=actor,
             comment=comment,
@@ -1993,6 +2068,7 @@ class Parser:
         "forgejo": {
             "push": parse_forgejo_push_event.__func__,  # type: ignore
             "issue_comment": parse_forgejo_comment_event.__func__,  # type: ignore
+            "pull_request": parse_forgejo_pr_event.__func__,  # type: ignore
         },
         # https://docs.gitlab.com/ee/user/project/integrations/webhook_events.html
         "gitlab": {
