@@ -9,6 +9,11 @@
     deployment: "{{ lookup('env', 'DEPLOYMENT', default='stg') }}"
   tasks:
     - import_tasks: tasks/process-source-branch.yaml
+    - name: Install custom python3-ogr RPM from local file
+      ansible.builtin.dnf:
+        name: /src/files/python3-ogr.rpm
+        state: present
+        disable_gpg_check: true
     - name: Install all RPM/python packages needed to run packit-service worker
       ansible.builtin.dnf:
         name:
@@ -60,7 +65,7 @@
     - name: Install ogr, specfile and packit from copr
       ansible.builtin.dnf:
         name:
-          - python3-ogr
+          # - python3-ogr  # Excluded to avoid overwriting custom RPM
           - python3-specfile
           - packit
         state: latest

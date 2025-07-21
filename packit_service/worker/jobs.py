@@ -28,7 +28,7 @@ from packit_service.events import (
     koji,
     pagure,
     testing_farm,
-    gitlab
+    forgejo
 )
 from packit_service.events.event import Event
 from packit_service.events.event_data import EventData
@@ -464,7 +464,7 @@ class SteveJobs:
             package_name = "example_package"  # default fallback
             specfile_path = None
 
-            if isinstance(self.event, gitlab.mr.Comment):
+            if isinstance(self.event, forgejo.pr.Comment):
                 package_name = "example_package"  # default fallback
                 specfile_path = None
 
