@@ -53,5 +53,5 @@ elif [[ "${CELERY_COMMAND}" == "worker" ]]; then
     fi
 
     # https://docs.celeryq.dev/en/stable/userguide/optimizing.html#optimizing-prefetch-limit
-    exec celery --app="${APP}" worker --loglevel="${LOGLEVEL:-DEBUG}" --concurrency="${CONCURRENCY}" --pool="${POOL}" --prefetch-multiplier=1 --queues="${QUEUES}"
+    exec celery --app="${APP}" worker --loglevel="${LOGLEVEL:-DEBUG}" --concurrency="${CONCURRENCY}" --pool=solo --prefetch-multiplier=1 --queues="${QUEUES}"
 fi

@@ -117,6 +117,7 @@ class Event(ABC):
         the event.
         """
         return [
+            "_parent"
             "_db_project_object",
             "_db_project_event",
             "_project",

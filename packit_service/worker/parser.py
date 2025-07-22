@@ -744,25 +744,20 @@ class Parser:
             logger.warning("No user login in comment.")
             return None
 
-        kwargs = dict(
-            pr_id=issue_id,
-            base_repo_namespace=base_repo_namespace,
-            base_repo_name=base_repo_name,
-            base_ref="",
-            target_repo_namespace=target_repo_namespace,
-            target_repo_name=target_repo_name,
-            project_url=https_url,
-            actor=user_login,
-            comment=comment,
-            comment_id=comment_id,
-            comment_object=None,
-            commit_sha=None,
-        )
-
         if is_pr:
             return forgejo.pr.Comment(
                 action=PullRequestCommentAction[action],
-                **kwargs,
+                pr_id=issue_id,
+                base_ref="",
+                base_repo_namespace=base_repo_namespace,
+                base_repo_name=base_repo_name,
+                target_repo_namespace=target_repo_namespace,
+                target_repo_name=target_repo_name,
+                project_url=https_url,
+                actor=user_login,
+                comment=comment,
+                comment_id=comment_id,
+                commit_sha=None,
             )
         else:
             return forgejo.issue.Comment(
@@ -777,9 +772,9 @@ class Parser:
                 comment_id=comment_id,
                 tag_name="",
                 base_ref="",
-                comment_object=None,
                 dist_git_project_url=None,
             )
+
 
 
     @staticmethod

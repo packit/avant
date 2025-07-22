@@ -248,13 +248,6 @@ def run_copr_build_start_handler(event: dict, package_config: dict, job_config: 
     )
     return get_handlers_task_results(handler.run_job(), event)
 
-@celery_app.task(name=TaskName.new_package, base=TaskWithRetry)
-def run_new_package_handler(event: dict):
-    handler = NewPackageRepositoryHandler(event=event)
-    result = handler.run_job()
-    return get_handlers_task_results(result, event)
-
-
 @celery_app.task(name=TaskName.hello_world, base=TaskWithRetry)
 def run_hello_world_handler(event: dict):
     from packit_service.worker.handlers.hello_world import HelloWorldNewPackageHandler
@@ -315,6 +308,26 @@ def database_maintenance() -> None:
 
 # Usage / statistics tasks
 
+@celery_app.task
+def debug_with_pycharm():
+    import pydevd_pycharm
+    try:
+        pydevd_pycharm.settrace(
+            host='host.docker.internal',  # or the IP of the host if not using Docker Desktop
+            port=5678,
+            stdoutToServer=True,
+            stderrToServer=True,
+            suspend=True  # wait for PyCharm to attach
+        )
+        print("✅ Connected to debugger.")
+    except Exception as e:
+        print(f"❌ Debugger connection failed: {e}")
+
+    # Now add a real breakpoint or test logic
+    import time
+    print("Doing debuggy stuff...")
+    time.sleep(5)
+    print("Done.")
 
 @celery_app.task
 def run_check_onboarded_projects() -> None:

@@ -54,6 +54,8 @@
         name:
           - git+https://github.com/packit/sandcastle.git@{{ source_branch }}
           - eventlet
+          - pydevd-pycharm~=251.26094.141
+          - debugpy
     - name: Install guppy3 for memory profiling in non production environments
       ansible.builtin.pip:
         name:
