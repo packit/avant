@@ -22,14 +22,7 @@ from packit_service.constants import (
     PACKIT_VERIFY_FAS_COMMAND,
     TASK_ACCEPTED,
 )
-from packit_service.events import (
-    abstract,
-    github,
-    koji,
-    pagure,
-    testing_farm,
-    forgejo
-)
+from packit_service.events import abstract, forgejo, github, koji, pagure, testing_farm
 from packit_service.events.event import Event
 from packit_service.events.event_data import EventData
 from packit_service.package_config_getter import PackageConfigGetter
@@ -234,11 +227,8 @@ class SteveJobs:
                 isinstance(
                     self.event,
                     (pagure.pr.Action, pagure.pr.Comment,
-                     koji.result.Task, testing_farm.Result),
+                     koji.result.Task, testing_farm.Result, forgejo.pr.Action),
                 )
-                and self.event.db_project_object
-                and (url := self.event.db_project_object.project.project_url)
-                and url in self.service_config.enabled_projects_for_fedora_ci
         ):
             # try to process Fedora CI jobs first
             processing_results = self.process_fedora_ci_jobs()

@@ -269,6 +269,7 @@ class TaskName(str, enum.Enum):
     copr_build_end = "task.run_copr_build_end_handler"
     copr_build = "task.run_copr_build_handler"
     installation = "task.run_installation_handler"
+    fedora_ci_copr_build = "task.run_fedora_ci_copr_build_handler"
     testing_farm = "task.run_testing_farm_handler"
     testing_farm_results = "task.run_testing_farm_results_handler"
     downstream_testing_farm = "task.run_downstream_testing_farm_handler"

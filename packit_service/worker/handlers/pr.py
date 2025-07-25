@@ -4,21 +4,21 @@ import re
 from typing import Optional, override
 
 from celery import Task
-from packit.config import PackageConfig, JobConfig, CommonPackageConfig
-from packit.config.job_config import JobType, JobConfigTriggerType
+from packit.config import CommonPackageConfig, JobConfig, PackageConfig
+from packit.config.job_config import JobConfigTriggerType, JobType
 from packit.utils.extensions import nested_get
 
+from packit_service.events import forgejo
 from packit_service.worker.handlers.abstract import (
     FedoraCIJobHandler,
+    RetriableJobHandler,
+    TaskName,
+    configured_as,
     reacts_to_as_fedora_ci,
     run_for_comment_as_fedora_ci,
-    TaskName,
-    RetriableJobHandler,
-    configured_as,
 )
-from packit_service.events import forgejo
 from packit_service.worker.handlers.mixin import GetCoprBuildJobHelperMixin
-from packit_service.worker.mixin import PackitAPIWithDownstreamMixin, ConfigFromEventMixin
+from packit_service.worker.mixin import ConfigFromEventMixin, PackitAPIWithDownstreamMixin
 from packit_service.worker.result import TaskResults
 
 

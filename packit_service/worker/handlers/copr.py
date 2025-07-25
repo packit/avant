@@ -7,8 +7,11 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from celery import Task, signature
+from ogr.abstract import GitProject
 from ogr.services.github import GithubProject
 from ogr.services.gitlab import GitlabProject
+from osc.util.repodata import namespace
+from packit.api import PackitAPI
 from packit.config import (
     JobConfig,
     JobConfigTriggerType,
@@ -17,22 +20,18 @@ from packit.config import (
 from packit.config.package_config import PackageConfig
 
 from packit_service import sentry_integration
+from packit_service.config import ServiceConfig
 from packit_service.constants import (
     COPR_API_SUCC_STATE,
     COPR_SRPM_CHROOT,
 )
-from packit_service.events import (
-    abstract,
-    copr,
-    github,
-    gitlab,
-    forgejo
-)
+from packit_service.events import abstract, copr, forgejo, github, gitlab
 from packit_service.models import (
     BuildStatus,
     CoprBuildTargetModel,
     ProjectEventModelType,
 )
+from packit_service.package_config_getter import PackageConfigGetter
 from packit_service.service.urls import get_copr_build_info_url, get_srpm_build_info_url
 from packit_service.utils import (
     dump_job_config,
@@ -56,7 +55,7 @@ from packit_service.worker.handlers.abstract import (
     configured_as,
     reacts_to,
     run_for_check_rerun,
-    run_for_comment,
+    run_for_comment, FedoraCIJobHandler, reacts_to_as_fedora_ci,
 )
 from packit_service.worker.handlers.mixin import (
     ConfigFromEventMixin,
@@ -70,6 +69,82 @@ from packit_service.worker.reporting import BaseCommitStatus, DuplicateCheckMode
 from packit_service.worker.result import TaskResults
 
 logger = logging.getLogger(__name__)
+
+@reacts_to_as_fedora_ci(forgejo.pr.Action)
+class FedoraCICOPRHandler(FedoraCIJobHandler):
+    task_name = TaskName.fedora_ci_copr_build
+
+    _service_config: ServiceConfig
+    _project: GitProject
+    _package_config: PackageConfig
+
+    def __init__(
+            self,
+            package_config: PackageConfig,
+            job_config: JobConfig,
+            event: dict,
+    ):
+        self.event = event
+        self._service_config = None
+        self._project = None
+        self._package_config = None
+        self._get_config_from_pr()
+        super().__init__(
+            package_config=self._package_config,
+            job_config=job_config,
+            event=event,
+        )
+
+    def clean_api(self) -> None:
+        pass
+
+    @property
+    def package_config(self):
+        if self.package_config is None:
+            self._package_config = PackageConfigGetter.get_package_config_from_repo(
+                base_project=self._base_project,
+                project=self.project,
+                pr_id=self.event.get("identifier"),
+            )
+        return self._package_config
+
+    @property
+    def project(self) -> Optional[GitProject]:
+        if self._project is None:
+            return self.service_config.get_project(
+                url=self.project_url,
+            )
+        return self._project
+
+    @property
+    def service_config(self) -> Optional[ServiceConfig]:
+        if not self._service_config:
+            self._service_config = ServiceConfig.get_service_config()
+        return self._service_config
+
+    @property
+    def packit_api(self) -> PackitAPI:
+        return None
+
+    @property
+    def project_url(self) -> str:
+        return f"https://codeberg.org/{self.event['base_repo_namespace']}/{self.event['base_repo_name']}"
+
+    def _get_config_from_pr(self):
+        self._base_project = self.service_config.get_project(
+            url=f"https://codeberg.org/{self.event['target_repo_namespace']}/{self.event['target_repo_name']}",
+        )
+
+        self._project = self.service_config.get_project(
+            url=self.project_url,
+        )
+
+        self.package_config = PackageConfigGetter.get_package_config_from_repo(
+            base_project=self._base_project,
+            project=self._project,
+            pr_id=self.event.get("identifier"),
+        )
+
 
 
 @configured_as(job_type=JobType.copr_build)

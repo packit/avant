@@ -1,10 +1,12 @@
 from typing import Optional
 
 from ogr.abstract import Comment as OgrComment
+
+from packit_service.service.db_project_events import AddPullRequestEventToDb
+
 from ..abstract.comment import PullRequest as AbstractPRCommentEvent
 from ..enums import PullRequestAction, PullRequestCommentAction
 from .abstract import ForgejoEvent
-from packit_service.service.db_project_events import AddPullRequestEventToDb
 
 
 class Action(AddPullRequestEventToDb, ForgejoEvent):
@@ -23,7 +25,7 @@ class Action(AddPullRequestEventToDb, ForgejoEvent):
         actor: str,
     ):
         super().__init__(project_url=project_url, pr_id=pr_id)
-        self.action = action
+        self.action = action.value
         self.base_repo_namespace = base_repo_namespace
         self.base_repo_name = base_repo_name
         self.base_ref = base_ref

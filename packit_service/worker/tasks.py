@@ -12,6 +12,8 @@ from celery._state import get_current_task
 from celery.signals import after_setup_logger
 from ogr import __version__ as ogr_version
 from packit import __version__ as packit_version
+from packit.config import JobConfig, JobConfigTriggerType, JobType, PackageConfig
+from packit.config.common_package_config import CommonPackageConfig
 from packit.exceptions import PackitException
 from sqlalchemy import __version__ as sqlal_version
 from syslog_rfc5424_formatter import RFC5424Formatter
@@ -71,6 +73,7 @@ from packit_service.worker.handlers.bodhi import (
     IssueCommentRetriggerBodhiUpdateHandler,
     RetriggerBodhiUpdateHandler,
 )
+from packit_service.worker.handlers.copr import FedoraCICOPRHandler
 from packit_service.worker.handlers.distgit import (
     DownstreamKojiBuildHandler,
     DownstreamKojiScratchBuildHandler,
@@ -78,6 +81,7 @@ from packit_service.worker.handlers.distgit import (
     RetriggerDownstreamKojiBuildHandler,
     TagIntoSidetagHandler,
 )
+from packit_service.worker.handlers.forgejo_new_pr import ForgejoNewPrHandler
 from packit_service.worker.handlers.forges import GithubFasVerificationHandler
 from packit_service.worker.handlers.koji import (
     KojiBuildReportHandler,
@@ -85,7 +89,6 @@ from packit_service.worker.handlers.koji import (
     KojiTaskReportDownstreamHandler,
 )
 from packit_service.worker.handlers.usage import check_onboarded_projects
-from packit_service.worker.handlers.forgejo_new_pr import ForgejoNewPrHandler
 from packit_service.worker.helpers.build.babysit import (
     check_copr_build,
     check_pending_copr_builds,
@@ -93,10 +96,8 @@ from packit_service.worker.helpers.build.babysit import (
     check_pending_vm_image_builds,
     update_vm_image_build,
 )
-from packit_service.worker.result import TaskResults
 from packit_service.worker.jobs import SteveJobs
-from packit.config import PackageConfig, JobConfig, JobType, JobConfigTriggerType
-from packit.config.common_package_config import CommonPackageConfig
+from packit_service.worker.result import TaskResults
 
 dummy_common_package = CommonPackageConfig()
 DUMMY_PACKAGE_CONFIG = PackageConfig(packages={"dummy": dummy_common_package})
@@ -286,6 +287,27 @@ def run_copr_build_handler(
     )
     return get_handlers_task_results(handler.run_job(), event)
 
+
+@celery_app.task(
+    bind=True,
+    name=TaskName.fedora_ci_copr_build,
+    base=TaskWithRetry,
+)
+def run_fedora_ci_copr_build_handler(
+        self,
+        event: dict,
+        package_config: dict,
+        job_config: dict,
+        copr_build_group_id: Optional[int] = None,
+):
+    handler = FedoraCICOPRHandler(
+        package_config=None,
+        job_config=None,
+        event=event,
+    )
+    return get_handlers_task_results(handler.run_job(), event)
+
+
 def get_handlers_task_results(results: dict, event: dict) -> dict:
     # include original event to provide more info
     return {"job": results, "event": event}
@@ -337,7 +359,6 @@ def run_check_onboarded_projects() -> None:
         known_onboarded_projects,
     )
     check_onboarded_projects(almost_onboarded_projects)
-
 
 def _get_usage_interval_data(days, hours, count) -> None:
     """Call functions collecting usage statistics and **cache** results
