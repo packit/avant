@@ -4,8 +4,9 @@
 import logging
 import os
 from datetime import datetime, timezone
+import re
 from typing import Optional
-
+from packit.config.common_package_config import CommonPackageConfig
 from celery import Task, signature
 from ogr.abstract import GitProject
 from ogr.services.github import GithubProject
@@ -89,6 +90,16 @@ class FedoraCICOPRHandler(FedoraCIJobHandler):
         self._project = None
         self._package_config = None
         self._get_config_from_pr()
+        self.job_config = JobConfig(
+            type=JobType.copr_build,
+            trigger=JobConfigTriggerType.pull_request,
+            packages={
+                "package": CommonPackageConfig(
+                    _targets="fedora-rawhide-x86_64",
+                    owner=re.search(r"@([^ ]+)", event.get("body")).group(1)
+                )
+            }
+        )
         super().__init__(
             package_config=self._package_config,
             job_config=job_config,
