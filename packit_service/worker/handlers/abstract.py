@@ -298,8 +298,6 @@ class TaskName(str, enum.Enum):
     openscanhub_task_started = "task.openscanhub_task_started"
     downstream_koji_scratch_build = "task.run_downstream_koji_scratch_build_handler"
     downstream_koji_scratch_build_report = "task.run_downstream_koji_scratch_build_report_handler"
-    new_package = "task.run_new_package_handler"
-    hello_world = "task.run_hello_world_handler"
 
 
 class Handler(PackitAPIProtocol, Config):

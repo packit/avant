@@ -44,9 +44,7 @@ from packit_service.worker.handlers.vm_image import (
     VMImageBuildHandler,
     VMImageBuildResultHandler,
 )
-from packit_service.worker.handlers.hello_world import (
-    HelloWorldNewPackageHandler,
-)
+
 from packit_service.worker.handlers.forgejo_new_pr import (
     ForgejoNewPrHandler,
 )
