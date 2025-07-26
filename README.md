@@ -3,12 +3,8 @@
 service to make onboarding packages to Fedora easier.
 
 - [x] Forgejo integration[create projects and react to push events]
-- [ ] Authentication
-- [ ] COPR Builds
-    - [x] Queue builds
-    ...
-- [ ] CI Testing
-    - [ ] rpmlint
-    - [ ] installability checks
-    ...
-
+- [-] COPR Builds
+- [ ] Run packit/tmt-plans with Testing farm on new packages
+- [ ] Reruns
+- [x] Status Reporting
+- [ ] Unit tests
