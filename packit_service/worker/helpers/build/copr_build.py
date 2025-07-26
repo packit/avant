@@ -919,6 +919,11 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
 
         try:
             overwrite_booleans = owner == self.service_config.fas_user
+            add_func = self.api.copr_helper.copr_client.project_proxy.add
+            def wrapped_call(*args, **kwargs):
+                kwargs.setdefault("fedora_review", True)
+                return add_func(*args, **kwargs)
+            self.api.copr_helper.copr_client.project_proxy.add = wrapped_call
             self.api.copr_helper.create_or_update_copr_project(
                 project=self.job_project,
                 chroots=list(self.build_targets_all),
