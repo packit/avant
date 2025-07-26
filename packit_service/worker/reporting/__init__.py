@@ -3,6 +3,7 @@
 
 from packit_service.worker.reporting.enums import BaseCommitStatus, DuplicateCheckMode
 from packit_service.worker.reporting.reporters.base import StatusReporter
+from packit_service.worker.reporting.reporters.forgejo import StatusReporterForgejo
 from packit_service.worker.reporting.reporters.github import (
     StatusReporterGithubChecks,
     StatusReporterGithubStatuses,
@@ -24,6 +25,7 @@ __all__ = [
     StatusReporterGithubChecks.__name__,
     StatusReporterGithubStatuses.__name__,
     StatusReporterGitlab.__name__,
+    StatusReporterForgejo.__name__,
     create_issue_if_needed.__name__,
     comment_without_duplicating,
 ]

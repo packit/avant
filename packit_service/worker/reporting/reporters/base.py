@@ -10,6 +10,7 @@ from ogr.services.github import GithubProject
 from ogr.services.gitlab import GitlabProject
 from ogr.services.pagure import PagureProject
 
+from ogr.ogr.services.forgejo.project import ForgejoProject
 from packit_service.worker.reporting.enums import (
     MAP_TO_CHECK_RUN,
     MAP_TO_COMMIT_STATUS,
@@ -57,6 +58,7 @@ class StatusReporter:
         from .github import StatusReporterGithubChecks
         from .gitlab import StatusReporterGitlab
         from .pagure import StatusReporterPagure
+        from .forgejo import StatusReporterForgejo
 
         reporter = StatusReporter
         if isinstance(project, GithubProject):
@@ -65,6 +67,8 @@ class StatusReporter:
             reporter = StatusReporterGitlab
         elif isinstance(project, PagureProject):
             reporter = StatusReporterPagure
+        elif isinstance(project, ForgejoProject):
+            reporter = StatusReporterForgejo
         return reporter(project, commit_sha, packit_user, project_event_id, pr_id)
 
     @property
