@@ -87,6 +87,7 @@ class Comment(AbstractPRCommentEvent, ForgejoEvent):
         """
         from ..abstract.comment import CommentEvent
         result = CommentEvent.get_dict(self, default_dict=default_dict)
+        result.pop("_comment_object")
         result["action"] = self.action.value
         result["pr_id"] = self.pr_id
         result["commit_sha"] = self._commit_sha  # Use the private attribute directly
