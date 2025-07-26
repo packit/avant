@@ -45,18 +45,6 @@ ping_payload_gitlab = ns.model(
     },
 )
 
-ping_payload_new_package = ns.model(
-    "New package webhook ping",
-    {
-        "package_name": fields.String(required=True, description="Name of the package"),
-        "package_version": fields.String(
-            required=True, description="Version of the package",
-        ),
-        "author": fields.String(
-            required=True, description="Author of the package",
-        ),
-    },
-)
 
 github_webhook_calls = Counter(
     "github_webhook_calls",
@@ -371,39 +359,6 @@ class GitlabWebhook(Resource):
         logger.debug(f"{event_type} {
                      ' (not interested)' if not _interested else ''}")
         return _interested
-
-
-@ns.route("/new-package")
-class NewPackageWebhook(Resource):
-    @ns.response(HTTPStatus.OK.value, "Webhook accepted, returning reply")
-    @ns.response(
-        HTTPStatus.ACCEPTED.value,
-        "Webhook accepted, request is being processed",
-    )
-    @ns.response(HTTPStatus.BAD_REQUEST.value, "Bad request data")
-    @ns.expect(ping_payload_new_package)
-    def post(self):
-        """
-        A webhook used by Packit-as-a-Service to notify about new packages.
-        """
-        msg = request.json
-
-        if not msg:
-            logger.debug(
-                "/webhooks/new-package: we haven't received any JSON data.")
-            return "We haven't received any JSON data.", HTTPStatus.BAD_REQUEST
-
-        celery_app.send_task(
-            name=getenv(
-                "CELERY_MAIN_TASK_NAME") or CELERY_DEFAULT_MAIN_TASK_NAME,
-            kwargs={
-                "event": msg,
-                "source": "new-package",
-                "event_type": "new-package",
-            },
-        )
-
-        return "Webhook accepted. We thank you.", HTTPStatus.ACCEPTED
 
 
 forgejo_webhook_calls = Counter(

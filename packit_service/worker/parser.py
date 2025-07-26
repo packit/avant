@@ -33,7 +33,6 @@ from packit_service.events import (
     pagure,
     testing_farm,
     vm_image,
-    new_package,
     forgejo
 )
 from packit_service.events.enums import (
@@ -41,7 +40,6 @@ from packit_service.events.enums import (
     PullRequestAction,
     PullRequestCommentAction,
 )
-from packit_service.events.new_package import NewPackageEvent
 from packit_service.models import (
     GitBranchModel,
     ProjectEventModel,
@@ -113,7 +111,6 @@ class Parser:
             anitya.NewHotness,
             anitya.VersionUpdate,
             copr.CoprBuild,
-            new_package.NewPackageEvent,
             github.check.Commit,
             github.check.PullRequest,
             github.check.Release,
@@ -194,7 +191,6 @@ class Parser:
                 Parser.parse_openscanhub_task_started_event,
                 Parser.parse_commit_comment_event,
                 Parser.parse_pagure_pull_request_event,
-                Parser.parse_new_package_event,
                 Parser.parse_forgejo_comment_event,
                 Parser.parse_forgejo_pr_event
             )
@@ -205,18 +201,6 @@ class Parser:
         logger.debug("We don't process this event.")
         return None
 
-    @staticmethod
-    def parse_new_package_event(event) -> Optional[NewPackageEvent]:
-        # Accept both "version" and "package_version"
-        version = event.get("version") or event.get("package_version")
-        if not all([event.get("package_name"), event.get("author"), version]):
-            return None
-
-        return NewPackageEvent(
-            package_name=event["package_name"],
-            author=event["author"],
-            package_version=version
-        )
     @staticmethod
     def parse_mr_event(event) -> Optional[gitlab.mr.Action]:
         """Look into the provided event and see if it's one for a new gitlab MR."""
@@ -2100,8 +2084,5 @@ class Parser:
         },
         "testing-farm": {
             "results": parse_testing_farm_results_event.__func__,  # type: ignore
-        },
-        "new-package": {
-            "new-package": parse_new_package_event.__func__,  # type: ignore
         },
     }

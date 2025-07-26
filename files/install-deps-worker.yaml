@@ -9,17 +9,15 @@
     deployment: "{{ lookup('env', 'DEPLOYMENT', default='stg') }}"
   tasks:
     - import_tasks: tasks/process-source-branch.yaml
-    - name: Install custom python3-ogr RPM from local file
+    - name: Install UV package manager
       ansible.builtin.dnf:
-        name: /src/files/python3-ogr.rpm
+        name: uv
         state: present
-        disable_gpg_check: true
     - name: Install all RPM/python packages needed to run packit-service worker
       ansible.builtin.dnf:
         name:
           - nss_wrapper # openshift anyuid passwd madness
           - python3-requests
-          - python3-prometheus_client
           - python3-sqlalchemy
           - python3-psycopg2
           - python3-redis
@@ -29,6 +27,9 @@
           - python3-syslog-rfc5424-formatter # logging to Splunk
           - dnf-utils
           - make
+          - python3-kubernetes
+          - python3-prometheus_client
+          - libffi-devel
           # for pip-installing sandcastle from git repo
           - git-core
           # oc rsync /tmp/sandcastle -> sandcastle pod
@@ -49,25 +50,48 @@
           - centpkg
         state: present
         install_weak_deps: False
-    - name: Install pip deps
-      ansible.builtin.pip:
-        name:
-          - git+https://github.com/packit/sandcastle.git@{{ source_branch }}
-          - eventlet
-          - pydevd-pycharm~=251.26094.141
-          - debugpy
-    - name: Install guppy3 for memory profiling in non production environments
-      ansible.builtin.pip:
-        name:
-          - guppy3
-      when: deployment != 'prod'
-    - name: Check if all pip packages have all dependencies installed
-      command: pip check
+    - name: Create UV virtual environment with system site packages
+      ansible.builtin.command:
+        cmd: uv venv --system-site-packages /opt/packit-venv
+        creates: /opt/packit-venv
+    - name: Check if OGR source directory exists
+      ansible.builtin.stat:
+        path: /home/packit/ogr
+      register: ogr_source
+
+    - name: Install OGR from local source in UV venv
+      ansible.builtin.command:
+        cmd: uv pip install --python /opt/packit-venv/bin/python /home/packit/ogr
+      when: ogr_source.stat.exists and ogr_source.stat.isdir
+
+    - name: Install OGR from git if local source not available
+      ansible.builtin.command:
+        cmd: uv pip install --python /opt/packit-venv/bin/python git+https://github.com/packit/ogr.git@{{ source_branch }}
+      when: not (ogr_source.stat.exists and ogr_source.stat.isdir)
+    - name: Install all Python packages in UV venv
+      ansible.builtin.shell:
+        cmd: |
+          source /opt/packit-venv/bin/activate
+          if [ -d "/home/packit/ogr" ]; then
+            uv pip install /home/packit/ogr
+          else
+            uv pip install git+https://github.com/packit/ogr.git@{{ source_branch }}
+          fi
+          uv pip install git+https://github.com/packit/sandcastle.git@{{ source_branch }} eventlet pydevd-pycharm~=251.26094.141 debugpy
+          {% if deployment != 'prod' %}
+          uv pip install guppy3
+          {% endif %}
+          pip check
+    - name: Create symlink for easy access to UV venv python
+      ansible.builtin.file:
+        src: /opt/packit-venv/bin/python
+        dest: /usr/local/bin/packit-python
+        state: link
     - import_tasks: tasks/setup-copr-repos.yaml
     - name: Install ogr, specfile and packit from copr
       ansible.builtin.dnf:
         name:
-          # - python3-ogr  # Excluded to avoid overwriting custom RPM
+          # - python3-ogr  # Now installed in UV venv from local source
           - python3-specfile
           - packit
         state: latest

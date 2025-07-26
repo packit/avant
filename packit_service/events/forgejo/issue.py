@@ -58,8 +58,8 @@ class Comment(AbstractIssueCommentEvent, ForgejoEvent):
     @property
     def commit_sha(self) -> Optional[str]:
         """
-        For Forgejo issue comments, we don't need commit_sha from tags
-        since these are typically new_package commands.
+        For Forgejo issue comments, return the commit_sha passed in constructor
+        without making API calls to avoid authentication issues.
         """
         return self._commit_sha
 

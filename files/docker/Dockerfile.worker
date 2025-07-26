@@ -17,7 +17,9 @@ WORKDIR /src
 
 COPY files/install-deps-worker.yaml ./files/
 COPY files/tasks/ ./files/tasks/
-COPY files/python3-ogr.rpm ./files/python3-ogr.rpm
+# Copy local OGR source for development
+COPY files/ogr /home/packit/ogr
+# COPY files/python3-ogr.rpm ./files/python3-ogr.rpm
 RUN ansible-playbook -vv -c local -i localhost, files/install-deps-worker.yaml \
     && dnf clean all
 
@@ -37,5 +39,6 @@ RUN git rev-parse HEAD >/.packit-service.git.commit.hash \
 # prepopulate fedora-distro-aliases cache
 RUN python3 -c 'from fedora_distro_aliases import get_distro_aliases; get_distro_aliases(cache=True)' \
     && chmod 0666 ~/.cache/fedora-distro-aliases/cache.json
+RUN source /opt/packit-venv/bin/activate && uv pip show sandcastle
 
 CMD ["/usr/bin/run_worker.sh"]

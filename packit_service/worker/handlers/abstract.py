@@ -52,14 +52,11 @@ SUPPORTED_EVENTS_FOR_HANDLER: dict[type["JobHandler"],
 SUPPORTED_EVENTS_FOR_HANDLER_FEDORA_CI: dict[type["FedoraCIJobHandler"], set[type["Event"]]] = (
     defaultdict(set)
 )
-SUPPORTED_EVENTS_FOR_HANDLER_NEW_PACKAGE: dict[type["NewPackageHandler"],
-                                               set[type["Event"]]] = defaultdict(set)
 MAP_COMMENT_TO_HANDLER: dict[str, set[type["JobHandler"]]] = defaultdict(set)
 MAP_COMMENT_TO_HANDLER_FEDORA_CI: dict[str,
                                        set[type["FedoraCIJobHandler"]]] = defaultdict(set)
 MAP_CHECK_PREFIX_TO_HANDLER: dict[str,
                                   set[type["JobHandler"]]] = defaultdict(set)
-MAP_COMMENT_TO_HANDLER_NEW_PACKAGE: dict[str, set[type["NewPackageHandler"]]] = defaultdict(set)
 
 def configured_as(job_type: JobType):
     """
@@ -114,23 +111,6 @@ def reacts_to(event: type["Event"]):
         SUPPORTED_EVENTS_FOR_HANDLER[kls].add(event)
         return kls
 
-    return _add_to_mapping
-
-
-def reacts_to_new_package(event: type["Event"]):
-    """
-    [class decorator]
-    Specify an event for which we want to use this handler for new package.
-
-    Example:
-    ```
-    @reacts_to_new_package(NewPackageEvent)
-    class NewPackageHandler(JobHandler):
-    ```
-    """
-    def _add_to_mapping(kls: type["NewPackageHandler"]):
-        SUPPORTED_EVENTS_FOR_HANDLER_NEW_PACKAGE[kls].add(event)
-        return kls
     return _add_to_mapping
 
 
@@ -210,30 +190,6 @@ def run_for_comment_as_fedora_ci(command: str):
         MAP_COMMENT_TO_HANDLER_FEDORA_CI[command].add(kls)
         return kls
 
-    return _add_to_mapping
-
-
-def run_for_comment_new_package(command: str):
-    """
-    [class decorator]
-    Specify a command for which we want to run a handler for new_package comment commands.
-    e.g. for `/packit hello-world` we need to add `hello-world`
-
-    Multiple decorators are allowed.
-
-    Don't forget to specify valid comment events using @reacts_to_new_package decorator.
-
-    Example:
-    ```
-    @run_for_comment_new_package(command="hello-world")
-    @reacts_to_new_package(NewPackageEvent)
-    class HelloWorldHandler(NewPackageHandler):
-        ...
-    ```
-    """
-    def _add_to_mapping(kls: type["NewPackageHandler"]):
-        MAP_COMMENT_TO_HANDLER_NEW_PACKAGE[command].add(kls)
-        return kls
     return _add_to_mapping
 
 
@@ -527,7 +483,3 @@ class FedoraCIJobHandler(JobHandler):
         cls, service_config: ServiceConfig, project: GitProject, metadata: EventData
     ) -> list[str]:
         return [cls.check_name] if cls.check_name else []
-
-
-class NewPackageHandler(JobHandler):
-    task_name = TaskName.new_package
