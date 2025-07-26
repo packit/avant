@@ -68,6 +68,5 @@ __all__ = [
     VMImageBuildResultHandler.__name__,
     CoprOpenScanHubTaskFinishedHandler.__name__,
     CoprOpenScanHubTaskStartedHandler.__name__,
-    HelloWorldNewPackageHandler.__name__,
     ForgejoNewPrHandler.__name__,
 ]
