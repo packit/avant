@@ -19,7 +19,7 @@ from packit.config import (
     JobType,
 )
 from packit.config.package_config import PackageConfig
-
+from packit_service.worker.helpers.build.copr_build import CoprBuildJobHelper
 from packit_service import sentry_integration
 from packit_service.config import ServiceConfig
 from packit_service.constants import (
@@ -74,10 +74,12 @@ logger = logging.getLogger(__name__)
 @reacts_to_as_fedora_ci(forgejo.pr.Action)
 class FedoraCICOPRHandler(FedoraCIJobHandler):
     task_name = TaskName.fedora_ci_copr_build
+    check_name = "fedora-ci-copr-build"
 
     _service_config: ServiceConfig
     _project: GitProject
     _package_config: PackageConfig
+    _copr_build_helper: CoprBuildJobHelper
 
     def __init__(
             self,
@@ -88,21 +90,34 @@ class FedoraCICOPRHandler(FedoraCIJobHandler):
         self.event = event
         self._service_config = None
         self._project = None
-        self._package_config = None
-        self._get_config_from_pr()
+        self._copr_build_helper = None
+        self._base_project = None
+        self._package_config_from_pr = None
+        
+        # Extract owner from the event body
+        body = event.get("body", "")
+        owner_match = re.search(r"@([^ ]+)", body)
+        if not owner_match:
+            raise ValueError("No owner found in event body. Expected format: '@username'")
+        
+        owner = owner_match.group(1)
+        
+        # Create job config for Fedora CI COPR build
         self.job_config = JobConfig(
             type=JobType.copr_build,
             trigger=JobConfigTriggerType.pull_request,
             packages={
                 "package": CommonPackageConfig(
                     _targets="fedora-rawhide-x86_64",
-                    owner=re.search(r"@([^ ]+)", event.get("body")).group(1)
+                    owner=owner
                 )
             }
         )
+        
+        # Call parent constructor 
         super().__init__(
-            package_config=self._package_config,
-            job_config=job_config,
+            package_config=package_config,
+            job_config=self.job_config,
             event=event,
         )
 
@@ -110,52 +125,80 @@ class FedoraCICOPRHandler(FedoraCIJobHandler):
         pass
 
     @property
-    def package_config(self):
-        if self.package_config is None:
-            self._package_config = PackageConfigGetter.get_package_config_from_repo(
-                base_project=self._base_project,
-                project=self.project,
-                pr_id=self.event.get("identifier"),
-            )
-        return self._package_config
-
-    @property
-    def project(self) -> Optional[GitProject]:
+    def project(self) -> GitProject:
         if self._project is None:
-            return self.service_config.get_project(
+            self._project = self.service_config.get_project(
                 url=self.project_url,
             )
         return self._project
 
     @property
-    def service_config(self) -> Optional[ServiceConfig]:
+    def service_config(self) -> ServiceConfig:
         if not self._service_config:
             self._service_config = ServiceConfig.get_service_config()
         return self._service_config
+    
+    @property
+    def copr_build_helper(self) -> CoprBuildJobHelper:
+        if not self._copr_build_helper:
+            self._copr_build_helper = CoprBuildJobHelper(
+                service_config=self.service_config,
+                package_config=self.package_config,
+                project=self.project,
+                metadata=self.data,
+                db_project_event=self.data.db_project_event,
+                job_config=self.job_config,
+                build_targets_override=self.data.build_targets_override,
+                tests_targets_override=self.data.tests_targets_override,
+                pushgateway=self.pushgateway,
+                celery_task=self.celery_task,
+            )
+        return self._copr_build_helper
 
     @property
     def packit_api(self) -> PackitAPI:
         return None
+    
+    @property
+    def package_config(self) -> PackageConfig:
+        """Get package configuration, preferring one loaded from PR."""
+        if self._package_config_from_pr is None:
+            self._get_config_from_pr()
+        return self._package_config_from_pr if self._package_config_from_pr else super().package_config
 
     @property
     def project_url(self) -> str:
         return f"https://codeberg.org/{self.event['base_repo_namespace']}/{self.event['base_repo_name']}"
 
     def _get_config_from_pr(self):
-        self._base_project = self.service_config.get_project(
-            url=f"https://codeberg.org/{self.event['target_repo_namespace']}/{self.event['target_repo_name']}",
-        )
+        try:
+            self._base_project = self.service_config.get_project(
+                url=f"https://codeberg.org/{self.event['target_repo_namespace']}/{self.event['target_repo_name']}",
+            )
 
-        self._project = self.service_config.get_project(
-            url=self.project_url,
-        )
+            self._project = self.service_config.get_project(
+                url=self.project_url,
+            )
 
-        self.package_config = PackageConfigGetter.get_package_config_from_repo(
-            base_project=self._base_project,
-            project=self._project,
-            pr_id=self.event.get("identifier"),
-        )
+            # Load package config from PR
+            self._package_config_from_pr = PackageConfigGetter.get_package_config_from_repo(
+                base_project=self._base_project,
+                project=self._project,
+                pr_id=self.event.get("identifier"),
+            )
+        except Exception as e:
+            # If we can't load from PR, we'll use the fallback from parent
+            logger.warning(f"Failed to load package config from PR: {e}")
+            self._package_config_from_pr = None
 
+    def run(self) -> TaskResults:
+        # [XXX] For now cancel only when an environment variable is defined,
+        # should allow for less stressful testing and also optionally turning
+        # the cancelling on-and-off on the prod
+        if os.getenv("CANCEL_RUNNING_JOBS"):
+            self.copr_build_helper.cancel_running_builds()
+
+        return self.copr_build_helper.run_copr_build_from_source_script()
 
 
 @configured_as(job_type=JobType.copr_build)
@@ -205,7 +248,7 @@ class CoprBuildHandler(
             IsGitForgeProjectAndEventOk,
             CanActorRunTestsJob,
         )
-
+    
     def run(self) -> TaskResults:
         # [XXX] For now cancel only when an environment variable is defined,
         # should allow for less stressful testing and also optionally turning

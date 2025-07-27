@@ -2,7 +2,6 @@
 
 set -eux
 
-source /opt/packit-venv/bin/activate
 echo "Using Python: $(which python)"
 echo "Python version: $(python --version)"
 # $APP defines where's the module (or package)
@@ -56,5 +55,5 @@ elif [[ "${CELERY_COMMAND}" == "worker" ]]; then
     fi
 
     # https://docs.celeryq.dev/en/stable/userguide/optimizing.html#optimizing-prefetch-limit
-    exec /opt/packit-venv/bin/python -m celery --app="${APP}" worker --loglevel="${LOGLEVEL:-DEBUG}" --concurrency="${CONCURRENCY}" --pool=solo --prefetch-multiplier=1 --queues="${QUEUES}"
+    exec celery --app="${APP}" worker --loglevel="${LOGLEVEL:-DEBUG}" --concurrency="${CONCURRENCY}" --pool=solo --prefetch-multiplier=1 --queues="${QUEUES}"
 fi

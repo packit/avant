@@ -8,10 +8,6 @@
     source_branch: "{{ lookup('env', 'SOURCE_BRANCH') }}"
   tasks:
     - import_tasks: tasks/process-source-branch.yaml
-    - name: Install UV package manager
-      ansible.builtin.dnf:
-        name: uv
-        state: present
     - name: Install all RPM/python packages needed to run packit-service
       ansible.builtin.dnf:
         name:
@@ -45,34 +41,11 @@
           - python-setuptools_scm
         state: present
         install_weak_deps: False
-    - name: Create UV virtual environment with system site packages
-      ansible.builtin.command:
-        cmd: uv venv --system-site-packages /opt/packit-venv
-        creates: /opt/packit-venv
-    - name: Check if OGR source directory exists
-      ansible.builtin.stat:
-        path: /home/packit/ogr
-      register: ogr_source
-
-    - name: Install OGR from local source in UV venv
-      ansible.builtin.command:
-        cmd: uv pip install --python /opt/packit-venv/bin/python /home/packit/ogr
-      when: ogr_source.stat.exists and ogr_source.stat.isdir
-
-    - name: Install OGR from git if local source not available
-      ansible.builtin.command:
-        cmd: uv pip install --python /opt/packit-venv/bin/python git+https://github.com/packit/ogr.git@{{ source_branch }}
-      when: not (ogr_source.stat.exists and ogr_source.stat.isdir)
-    - name: Create symlink for easy access to UV venv python
-      ansible.builtin.file:
-        src: /opt/packit-venv/bin/python
-        dest: /usr/local/bin/packit-python
-        state: link
     - import_tasks: tasks/setup-copr-repos.yaml
     - name: Install ogr, specfile and packit from copr
       ansible.builtin.dnf:
         name:
-          # - python3-ogr  # Now installed in UV venv from local source
+          - python3-ogr
           - python3-specfile
           - packit
         state: latest

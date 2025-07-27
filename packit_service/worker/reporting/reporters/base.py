@@ -10,7 +10,7 @@ from ogr.services.github import GithubProject
 from ogr.services.gitlab import GitlabProject
 from ogr.services.pagure import PagureProject
 
-from ogr.ogr.services.forgejo.project import ForgejoProject
+from ogr.services.forgejo.project import ForgejoProject
 from packit_service.worker.reporting.enums import (
     MAP_TO_CHECK_RUN,
     MAP_TO_COMMIT_STATUS,
