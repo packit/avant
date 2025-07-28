@@ -238,14 +238,7 @@ def update_copr_builds(build_id: int, builds: Iterable["CoprBuildTargetModel"]) 
             )
             srpm_build.set_status(BuildStatus.error)
         else:
-            try:
-                update_srpm_build_state(srpm_build, build_copr, build_copr_srpm)
-            except Exception as ex:
-                logger.debug(
-                    f"There was an exception when updating the SRPM build of"
-                    f" Copr build {build_id}: {ex}",
-                )
-                return False
+            update_srpm_build_state(srpm_build, build_copr, build_copr_srpm)
 
     current_time = datetime.now(timezone.utc)
     for build in builds:
@@ -344,6 +337,8 @@ def update_srpm_build_state(
             event=event_dict,
         )
         if handler.pre_check(package_config, job_config, event_dict):
+            d=event.__dict__
+            d['_db_project_object'] = None
             signatures.append(handler.get_signature(event=event, job=job_config))
 
     celery_run_async(signatures=signatures)
@@ -423,6 +418,8 @@ def update_copr_build_state(
             event=event_dict,
         )
         if handler.pre_check(package_config, job_config, event_dict):
+            d=event.__dict__
+            d['_db_project_object'] = None
             signatures.append(handler.get_signature(event=event, job=job_config))
 
     celery_run_async(signatures=signatures)
