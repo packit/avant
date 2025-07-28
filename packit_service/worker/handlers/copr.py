@@ -71,8 +71,7 @@ from packit_service.worker.result import TaskResults
 
 logger = logging.getLogger(__name__)
 
-@reacts_to_as_fedora_ci(forgejo.pr.Action)
-class FedoraCICOPRHandler(FedoraCIJobHandler):
+class FedoraCICOPRHandler(FedoraCIJobHandler, RetriableJobHandler):
     task_name = TaskName.fedora_ci_copr_build
     check_name = "fedora-ci-copr-build"
 
@@ -86,6 +85,8 @@ class FedoraCICOPRHandler(FedoraCIJobHandler):
             package_config: PackageConfig,
             job_config: JobConfig,
             event: dict,
+            celery_task: Task,
+            copr_build_group_id: Optional[int] = None,
     ):
         self.event = event
         self._service_config = None
@@ -93,31 +94,52 @@ class FedoraCICOPRHandler(FedoraCIJobHandler):
         self._copr_build_helper = None
         self._base_project = None
         self._package_config_from_pr = None
+        self.celery_task = celery_task
+        self._copr_build_group_id = copr_build_group_id
         
         # Extract owner from the event body
         body = event.get("body", "")
-        owner_match = re.search(r"@([^ ]+)", body)
-        if not owner_match:
-            raise ValueError("No owner found in event body. Expected format: '@username'")
-        
-        owner = owner_match.group(1)
-        
+        # Look for FAS username pattern: "FAS username: @username" 
+        owner_match = re.search(r"FAS username:\s*@([^\s\n]+)", body)
+
+        # Store the original package_config passed to constructor
+        self._original_package_config = PackageConfig(
+            packages={
+                "hello": CommonPackageConfig()  # no additional keys at top-level
+            },
+            jobs=[
+                JobConfig(
+                    type=JobType.copr_build,
+                    trigger=JobConfigTriggerType.pull_request,
+                    packages={
+                        "hello": CommonPackageConfig(_targets=["fedora-rawhide-x86_64"])
+                    }
+                ),
+                JobConfig(
+                    type=JobType.tests,
+                    trigger=JobConfigTriggerType.pull_request,
+                    packages={
+                        "hello": CommonPackageConfig(_targets=["fedora-rawhide-x86_64"])
+                    }
+                )
+            ]
+        )
+
         # Create job config for Fedora CI COPR build
         self.job_config = JobConfig(
             type=JobType.copr_build,
             trigger=JobConfigTriggerType.pull_request,
             packages={
-                "package": CommonPackageConfig(
-                    _targets="fedora-rawhide-x86_64",
-                    owner=owner
+                "hello": CommonPackageConfig(
+                    _targets=["fedora-rawhide-x86_64"],
                 )
-            }
+            },
         )
-        
-        # Call parent constructor 
+        # Call parent constructor with effective package config
         super().__init__(
-            package_config=package_config,
+            package_config=self._original_package_config,
             job_config=self.job_config,
+            celery_task=celery_task,
             event=event,
         )
 
@@ -158,13 +180,6 @@ class FedoraCICOPRHandler(FedoraCIJobHandler):
     @property
     def packit_api(self) -> PackitAPI:
         return None
-    
-    @property
-    def package_config(self) -> PackageConfig:
-        """Get package configuration, preferring one loaded from PR."""
-        if self._package_config_from_pr is None:
-            self._get_config_from_pr()
-        return self._package_config_from_pr if self._package_config_from_pr else super().package_config
 
     @property
     def project_url(self) -> str:
@@ -185,7 +200,9 @@ class FedoraCICOPRHandler(FedoraCIJobHandler):
                 base_project=self._base_project,
                 project=self._project,
                 pr_id=self.event.get("identifier"),
+                reference="new_package"
             )
+            logger.info(f"{self._package_config_from_pr}")
         except Exception as e:
             # If we can't load from PR, we'll use the fallback from parent
             logger.warning(f"Failed to load package config from PR: {e}")
@@ -213,6 +230,7 @@ class FedoraCICOPRHandler(FedoraCIJobHandler):
 @reacts_to(gitlab.push.Commit)
 @reacts_to(gitlab.mr.Action)
 @reacts_to(forgejo.pr.Comment)
+@reacts_to(forgejo.pr.Action)
 @reacts_to(github.check.Rerun)
 @reacts_to(github.pr.Comment)
 @reacts_to(gitlab.mr.Comment)
@@ -588,18 +606,11 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
 
         for job_config in self.copr_build_helper.job_tests_all:
             if (
-                not job_config.skip_build
-                and not job_config.manual_trigger
                 # we need to check the labels here
                 # the same way as when scheduling jobs for event
-                and (
+                (
                     job_config.trigger != JobConfigTriggerType.pull_request
                     or not (job_config.require.label.present or job_config.require.label.absent)
-                    or pr_labels_match_configuration(
-                        pull_request=self.copr_build_helper.pull_request_object,
-                        configured_labels_absent=job_config.require.label.absent,
-                        configured_labels_present=job_config.require.label.present,
-                    )
                 )
                 and self.copr_event.chroot
                 in self.copr_build_helper.build_targets_for_test_job(job_config)

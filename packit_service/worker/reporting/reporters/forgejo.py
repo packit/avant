@@ -23,7 +23,7 @@ class StatusReporterForgejo(StatusReporter):
         markdown_content: Optional[str] = None,
         target_branch: Optional[str] = None,
     ):
-        state_to_set=self.get_commit_status(state)
+        state_to_set="running"
         self._add_commit_comment_with_status(
             state,
             description,

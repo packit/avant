@@ -653,6 +653,7 @@ class Parser:
         repo = event.get("repository", {})
         base = pr.get("base")
         head = pr.get("head")
+        body = pr.get("body")
 
         # Check all required nested fields
         try:
@@ -679,6 +680,7 @@ class Parser:
             commit_sha=commit_sha,
             commit_sha_before=event.get("before", ""),  # Optional, might be empty
             actor=actor,
+            body=body
         )
 
     @staticmethod

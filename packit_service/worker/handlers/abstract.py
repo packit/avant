@@ -286,7 +286,7 @@ class Handler(PackitAPIProtocol, Config):
                     scope.set_tag(k, v)
 
                 self.log_memory_stats()
-                if self.service_config.deployment in [Deployment.stg, Deployment.dev]:
+                if self.service_config.deployment in [Deployment.stg, Deployment.stg]:
                     from guppy import hpy
 
                     hp = hpy()
@@ -298,7 +298,7 @@ class Handler(PackitAPIProtocol, Config):
             raise
         finally:
             self.log_memory_stats()
-            if self.service_config.deployment in [Deployment.stg, Deployment.dev]:
+            if self.service_config.deployment in [Deployment.stg, Deployment.stg]:
                 after = hp.heap()
                 leftover = after - before
                 logger.info(

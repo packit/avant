@@ -298,6 +298,7 @@ def run_fedora_ci_copr_build_handler(
         package_config=None,
         job_config=None,
         event=event,
+        celery_task=self
     )
     return get_handlers_task_results(handler.run_job(), event)
 

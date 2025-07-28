@@ -227,7 +227,7 @@ class SteveJobs:
                 isinstance(
                     self.event,
                     (pagure.pr.Action, pagure.pr.Comment,
-                     koji.result.Task, testing_farm.Result, forgejo.pr.Action),
+                     koji.result.Task, testing_farm.Result),
                 )
         ):
             # try to process Fedora CI jobs first
@@ -357,7 +357,7 @@ class SteveJobs:
         For CI-related dist-git PR comment events report the initial status
         "Task was accepted" to inform user we are working on the request.
         """
-
+        
         if not isinstance(
                 self.event,
                 abstract.comment.PullRequest,
@@ -428,6 +428,75 @@ class SteveJobs:
         Returns:
             Whether the Packit configuration is present in the repo.
         """
+        # Handle Forgejo events first, regardless of whether they're comment events
+        if isinstance(self.event, forgejo.pr.Comment) or isinstance(self.event, forgejo.pr.Action):
+            logging.debug(f"Processing Forgejo PR event")
+
+            comment_lines = self.event.body.strip().split('\n')
+            for line in comment_lines:
+                line = line.strip()
+                if 'Package Name:' in line:
+                    parts = line.split('Package Name:', 1)
+                    if len(parts) == 2:
+                        extracted_name = parts[1].strip()
+                        if extracted_name:
+                            package_name = extracted_name
+                            specfile_path = f"{extracted_name}.spec"
+                elif 'package_name:' in line:
+                    # Keep backward compatibility
+                    parts = line.split('package_name:', 1)
+                    if len(parts) == 2:
+                        extracted_name = parts[1].strip()
+                        if extracted_name:
+                            package_name = extracted_name
+                            specfile_path = f"{extracted_name}.spec"
+                elif 'Version:' in line:
+                    parts = line.split('Version:', 1)
+                    if len(parts) == 2:
+                        package_version = parts[1].strip()
+                elif 'Description:' in line:
+                    parts = line.split('Description:', 1)
+                    if len(parts) == 2:
+                        package_description = parts[1].strip()
+                elif 'FAS username:' in line:
+                    parts = line.split('FAS username:', 1)
+                    if len(parts) == 2:
+                        fas_username = parts[1].strip()
+                elif 'License:' in line:
+                    parts = line.split('License:', 1)
+                    if len(parts) == 2:
+                        package_license = parts[1].strip()
+
+        # Create common package config (will use defaults if no comment parsing occurred)
+        common_package_config = CommonPackageConfig(
+            specfile_path=specfile_path,
+            _targets=["fedora-rawhide-x86_64"],
+        )
+
+        self.event._package_config = PackageConfig(
+            packages={
+                package_name: common_package_config
+            },
+            jobs=[
+                JobConfig(
+                    type=JobType.copr_build,
+                    trigger=JobConfigTriggerType.pull_request,
+                    packages={
+                        package_name: common_package_config
+                    }
+                ),
+                JobConfig(
+                    type=JobType.tests,
+                    trigger=JobConfigTriggerType.pull_request,
+                    packages={
+                        package_name: common_package_config
+                    }
+                )
+            ]
+        )
+        
+        return True
+
         if isinstance(self.event, abstract.comment.CommentEvent) and (
                 handlers := get_handlers_for_comment(
                     self.event.comment,
@@ -449,48 +518,7 @@ class SteveJobs:
                     self.event._package_config,
                 ) = dist_git_package_config
                 return True
-
-            # let's treat GitLab MR comments special and parse package name from comment
-            package_name = "example_package"  # default fallback
-            specfile_path = None
-
-            if isinstance(self.event, forgejo.pr.Comment):
-                package_name = "example_package"  # default fallback
-                specfile_path = None
-
-                if self.event.comment:
-                    comment_lines = self.event.comment.strip().split('\n')
-                    for line in comment_lines:
-                        line = line.strip()
-                        if 'package_name:' in line:
-                            parts = line.split('package_name:', 1)
-                            if len(parts) == 2:
-                                extracted_name = parts[1].strip()
-                                if extracted_name:
-                                    package_name = extracted_name
-                                    specfile_path = f"{extracted_name}.spec"
-                                    break
-
-                self.event._package_config = PackageConfig(
-                    packages={
-                        package_name: CommonPackageConfig(
-                            specfile_path=specfile_path,
-                            _targets=["fedora-all"],
-                        )
-                    },
-                    jobs=[JobConfig(
-                        type=JobType.copr_build,
-                        trigger=JobConfigTriggerType.pull_request,
-                        packages={
-                            package_name: CommonPackageConfig(
-                                specfile_path=specfile_path,
-                                _targets=["fedora-all"],
-                            )
-                        }
-                    )]
-                )
-                return True
-
+            
             if not dist_git_package_config:
                 self.event.fail_when_config_file_missing = True
 

@@ -23,6 +23,7 @@ class Action(AddPullRequestEventToDb, ForgejoEvent):
         commit_sha: str,
         commit_sha_before: str,
         actor: str,
+        body: str,
     ):
         super().__init__(project_url=project_url, pr_id=pr_id)
         self.action = action.value
@@ -35,7 +36,9 @@ class Action(AddPullRequestEventToDb, ForgejoEvent):
         self.commit_sha_before = commit_sha_before
         self.actor = actor
         self.identifier = str(pr_id)
+        self._pr_id = pr_id
         self.git_ref = None  # use pr_id for checkout
+        self.body = body
 
     @classmethod
     def event_type(cls) -> str:
@@ -66,7 +69,7 @@ class Comment(AbstractPRCommentEvent, ForgejoEvent):
             commit_sha=commit_sha,
             comment_object=comment_object,
         )
-        self.action = action
+        self.action = action.value
         self.base_repo_namespace = base_repo_namespace
         self.base_repo_name = base_repo_name
         self.base_ref = base_ref
@@ -75,6 +78,7 @@ class Comment(AbstractPRCommentEvent, ForgejoEvent):
         self.actor = actor
         self.identifier = str(pr_id)
         self.git_ref = None
+        self.pr_id = pr_id
 
     @classmethod
     def event_type(cls) -> str:
@@ -90,5 +94,5 @@ class Comment(AbstractPRCommentEvent, ForgejoEvent):
         result.pop("_comment_object")
         result["action"] = self.action.value
         result["pr_id"] = self.pr_id
-        result["commit_sha"] = self._commit_sha  # Use the private attribute directly
+        result["commit_sha"] = self._commit_sha
         return result

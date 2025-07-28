@@ -492,6 +492,8 @@ class CoprBuildJobHelper(BaseBuildJobHelper):
         Get index of the job config in the package config.
         (Index is being submitted to Copr via source script.)
         """
+        logger.debug(f"Getting job config index for {self.job_config}")
+        logger.debug(f"Package config jobs: {self.package_config.jobs}")
         return self.package_config.jobs.index(self.job_config)
 
     def report_running_build_and_test_on_build_submission(self, web_url: str):
