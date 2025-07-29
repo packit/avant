@@ -12,8 +12,6 @@ from celery._state import get_current_task
 from celery.signals import after_setup_logger
 from ogr import __version__ as ogr_version
 from packit import __version__ as packit_version
-from packit.config import JobConfig, JobConfigTriggerType, JobType, PackageConfig
-from packit.config.common_package_config import CommonPackageConfig
 from packit.exceptions import PackitException
 from sqlalchemy import __version__ as sqlal_version
 from syslog_rfc5424_formatter import RFC5424Formatter
@@ -73,7 +71,6 @@ from packit_service.worker.handlers.bodhi import (
     IssueCommentRetriggerBodhiUpdateHandler,
     RetriggerBodhiUpdateHandler,
 )
-from packit_service.worker.handlers.copr import FedoraCICOPRHandler
 from packit_service.worker.handlers.distgit import (
     DownstreamKojiBuildHandler,
     DownstreamKojiScratchBuildHandler,
@@ -81,7 +78,6 @@ from packit_service.worker.handlers.distgit import (
     RetriggerDownstreamKojiBuildHandler,
     TagIntoSidetagHandler,
 )
-from packit_service.worker.handlers.forgejo_new_pr import ForgejoNewPrHandler
 from packit_service.worker.handlers.forges import GithubFasVerificationHandler
 from packit_service.worker.handlers.koji import (
     KojiBuildReportHandler,
@@ -98,14 +94,6 @@ from packit_service.worker.helpers.build.babysit import (
 )
 from packit_service.worker.jobs import SteveJobs
 from packit_service.worker.result import TaskResults
-
-dummy_common_package = CommonPackageConfig()
-DUMMY_PACKAGE_CONFIG = PackageConfig(packages={"dummy": dummy_common_package})
-DUMMY_JOB_CONFIG = JobConfig(
-    type=JobType.copr_build,
-    trigger=JobConfigTriggerType.commit,
-    packages={"dummy": dummy_common_package}
-)
 
 logger = logging.getLogger(__name__)
 
@@ -260,11 +248,7 @@ def run_copr_build_end_handler(event: dict, package_config: dict, job_config: di
     return get_handlers_task_results(handler.run_job(), event)
 
 
-@celery_app.task(
-    bind=True,
-    name=TaskName.copr_build,
-    base=TaskWithRetry,
-)
+@celery_app.task(bind=True, name=TaskName.copr_build, base=TaskWithRetry, queue="long-running")
 def run_copr_build_handler(
     self,
     event: dict,
@@ -282,25 +266,120 @@ def run_copr_build_handler(
     return get_handlers_task_results(handler.run_job(), event)
 
 
-@celery_app.task(
-    bind=True,
-    name=TaskName.fedora_ci_copr_build,
-    base=TaskWithRetry,
-)
-def run_fedora_ci_copr_build_handler(
-        self,
-        event: dict,
-        package_config: dict,
-        job_config: dict,
-        copr_build_group_id: Optional[int] = None,
-):
-    handler = FedoraCICOPRHandler(
+@celery_app.task(name=TaskName.installation, base=TaskWithRetry)
+def run_installation_handler(event: dict, package_config: dict, job_config: dict):
+    handler = GithubAppInstallationHandler(
         package_config=None,
         job_config=None,
         event=event,
-        celery_task=self
     )
     return get_handlers_task_results(handler.run_job(), event)
+
+
+@celery_app.task(bind=True, name=TaskName.testing_farm, base=TaskWithRetry)
+def run_testing_farm_handler(
+    self,
+    event: dict,
+    package_config: dict,
+    job_config: dict,
+    build_id: Optional[int] = None,
+    testing_farm_target_id: Optional[int] = None,
+):
+    handler = TestingFarmHandler(
+        package_config=load_package_config(package_config),
+        job_config=load_job_config(job_config),
+        event=event,
+        build_id=build_id,
+        celery_task=self,
+        testing_farm_target_id=testing_farm_target_id,
+    )
+    return get_handlers_task_results(handler.run_job(), event)
+
+
+@celery_app.task(name=TaskName.testing_farm_results, base=TaskWithRetry)
+def run_testing_farm_results_handler(
+    event: dict,
+    package_config: dict,
+    job_config: dict,
+):
+    handler = TestingFarmResultsHandler(
+        package_config=load_package_config(package_config),
+        job_config=load_job_config(job_config),
+        event=event,
+    )
+    return get_handlers_task_results(handler.run_job(), event)
+
+
+@celery_app.task(
+    bind=True,
+    name=TaskName.pull_from_upstream,
+    base=TaskWithRetry,
+    queue="long-running",
+)
+def run_pull_from_upstream_handler(
+    self,
+    event: dict,
+    package_config: dict,
+    job_config: dict,
+    sync_release_run_id: Optional[int] = None,
+):
+    handler = PullFromUpstreamHandler(
+        package_config=load_package_config(package_config),
+        job_config=load_job_config(job_config),
+        event=event,
+        sync_release_run_id=sync_release_run_id,
+        celery_task=self,
+    )
+    return get_handlers_task_results(handler.run_job(), event)
+
+
+@celery_app.task(
+    bind=True,
+    name=TaskName.vm_image_build,
+    base=TaskWithRetry,
+    queue="short-running",
+)
+def run_vm_image_build(self, event: dict, package_config: dict, job_config: dict):
+    handler = VMImageBuildHandler(
+        package_config=load_package_config(package_config),
+        job_config=load_job_config(job_config),
+        event=event,
+        celery_task=self,
+    )
+    return get_handlers_task_results(handler.run_job(), event)
+
+
+@celery_app.task(name=TaskName.vm_image_build_result, base=TaskWithRetry)
+def run_vm_image_build_result(
+    self,
+    event: dict,
+    package_config: dict,
+    job_config: dict,
+):
+    handler = VMImageBuildResultHandler(
+        package_config=load_package_config(package_config),
+        job_config=load_job_config(job_config),
+        event=event,
+    )
+    return get_handlers_task_results(handler.run_job(), event)
+
+
+@celery_app.task(
+    bind=True,
+    name="task.babysit_vm_image_build",
+    autoretry_for=(PackitVMImageBuildTimeoutException,),
+    retry_backoff=30,  # retry again in 30s, 60s, 120s, 240s...
+    retry_backoff_max=3600,  # at most, wait for an hour between retries
+    max_retries=14,  # retry 14 times; with the backoff values above this is ~8 hours
+    retry_jitter=False,  # do not jitter, as it might considerably reduce the total wait time
+)
+def babysit_vm_image_build(self, build_id: int):
+    """check status of a vm image build and update it in DB"""
+    model = VMImageBuildTargetModel.get_by_build_id(build_id)
+    if not update_vm_image_build(build_id, model):
+        raise PackitVMImageBuildTimeoutException(
+            f"No feedback for vm image build id={build_id} yet",
+        )
 
 
 def get_handlers_task_results(results: dict, event: dict) -> dict:
@@ -317,34 +396,24 @@ def babysit_pending_copr_builds() -> None:
 
 
 @celery_app.task
+def babysit_pending_tft_runs() -> None:
+    check_pending_testing_farm_runs()
+
+
+@celery_app.task
 def database_maintenance() -> None:
     discard_old_srpm_build_logs()
     discard_old_package_configs()
     backup()
 
 
+@celery_app.task
+def babysit_pending_vm_image_builds() -> None:
+    check_pending_vm_image_builds()
+
+
 # Usage / statistics tasks
 
-@celery_app.task
-def debug_with_pycharm():
-    import pydevd_pycharm
-    try:
-        pydevd_pycharm.settrace(
-            host='host.docker.internal',  # or the IP of the host if not using Docker Desktop
-            port=5678,
-            stdoutToServer=True,
-            stderrToServer=True,
-            suspend=True  # wait for PyCharm to attach
-        )
-        print("✅ Connected to debugger.")
-    except Exception as e:
-        print(f"❌ Debugger connection failed: {e}")
-
-    # Now add a real breakpoint or test logic
-    import time
-    print("Doing debuggy stuff...")
-    time.sleep(5)
-    print("Done.")
 
 @celery_app.task
 def run_check_onboarded_projects() -> None:
@@ -354,6 +423,7 @@ def run_check_onboarded_projects() -> None:
         known_onboarded_projects,
     )
     check_onboarded_projects(almost_onboarded_projects)
+
 
 def _get_usage_interval_data(days, hours, count) -> None:
     """Call functions collecting usage statistics and **cache** results
