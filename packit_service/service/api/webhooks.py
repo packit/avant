@@ -371,7 +371,7 @@ class ForgejoWebhook(Resource):
     )
     @ns.response(HTTPStatus.BAD_REQUEST.value, "Bad request data")
     @ns.response(HTTPStatus.UNAUTHORIZED.value, "X-Forgejo-Signature validation failed")
-    @ns.expect(ping_payload)
+    @ns.expect(ping_payload_forgejo)
     def post(self):
         msg = request.json
 
