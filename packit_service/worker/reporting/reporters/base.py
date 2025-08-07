@@ -9,6 +9,7 @@ from ogr.abstract import GitProject, PullRequest
 from ogr.services.github import GithubProject
 from ogr.services.gitlab import GitlabProject
 from ogr.services.pagure import PagureProject
+from ogr.services.forgejo import ForgejoProject
 
 from packit_service.worker.reporting.enums import (
     MAP_TO_CHECK_RUN,
@@ -16,6 +17,7 @@ from packit_service.worker.reporting.enums import (
     BaseCommitStatus,
     DuplicateCheckMode,
 )
+from packit_service.worker.reporting.reporters.forgejo import StatusReporterForgejo
 from packit_service.worker.reporting.utils import has_identical_comment_in_comments
 
 logger = logging.getLogger(__name__)
@@ -65,6 +67,8 @@ class StatusReporter:
             reporter = StatusReporterGitlab
         elif isinstance(project, PagureProject):
             reporter = StatusReporterPagure
+        elif isinstance(project, StatusReporterForgejo):
+            reporter = StatusReporterForgejo
         return reporter(project, commit_sha, packit_user, project_event_id, pr_id)
 
     @property
