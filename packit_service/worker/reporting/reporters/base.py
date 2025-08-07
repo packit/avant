@@ -67,7 +67,7 @@ class StatusReporter:
             reporter = StatusReporterGitlab
         elif isinstance(project, PagureProject):
             reporter = StatusReporterPagure
-        elif isinstance(project, StatusReporterForgejo):
+        elif isinstance(project, ForgejoProject):
             reporter = StatusReporterForgejo
         return reporter(project, commit_sha, packit_user, project_event_id, pr_id)
 
