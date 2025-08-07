@@ -1977,7 +1977,8 @@ class Parser:
         comment = nested_get(event, "comment", "body")
         comment_id = nested_get(event, "comment", "id")
         logger.info(
-            f"Forgejo {'PR' if is_pr else 'issue'}#{issue_id} comment: {comment!r} id#{comment_id} {action!r} event."
+            f"Forgejo {'PR' if is_pr else 'issue'}#{issue_id} "
+            f"comment: {comment!r} id#{comment_id} {action!r} event."
         )
 
         base_repo_namespace = nested_get(event, "issue", "user", "login")

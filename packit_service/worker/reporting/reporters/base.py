@@ -6,10 +6,10 @@ from datetime import datetime, timezone
 from typing import Callable, Optional, Union
 
 from ogr.abstract import GitProject, PullRequest
+from ogr.services.forgejo import ForgejoProject
 from ogr.services.github import GithubProject
 from ogr.services.gitlab import GitlabProject
 from ogr.services.pagure import PagureProject
-from ogr.services.forgejo import ForgejoProject
 
 from packit_service.worker.reporting.enums import (
     MAP_TO_CHECK_RUN,
@@ -17,7 +17,6 @@ from packit_service.worker.reporting.enums import (
     BaseCommitStatus,
     DuplicateCheckMode,
 )
-from packit_service.worker.reporting.reporters.forgejo import StatusReporterForgejo
 from packit_service.worker.reporting.utils import has_identical_comment_in_comments
 
 logger = logging.getLogger(__name__)
@@ -56,6 +55,7 @@ class StatusReporter:
         """
         Get the StatusReporter instance.
         """
+        from .forgejo import StatusReporterForgejo
         from .github import StatusReporterGithubChecks
         from .gitlab import StatusReporterGitlab
         from .pagure import StatusReporterPagure

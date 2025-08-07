@@ -1,3 +1,6 @@
+# Copyright Contributors to the Packit project.
+# SPDX-License-Identifier: MIT
+
 # SPDX-License-Identifier: MIT
 
 from typing import Optional
@@ -55,6 +58,10 @@ class Comment(AbstractIssueCommentEvent, ForgejoEvent):
         """
         return self._tag_name
 
+    @tag_name.setter
+    def tag_name(self, value: str) -> None:
+        self._tag_name = value
+
     @property
     def commit_sha(self) -> Optional[str]:
         """
@@ -62,6 +69,10 @@ class Comment(AbstractIssueCommentEvent, ForgejoEvent):
         without making API calls to avoid authentication issues.
         """
         return self._commit_sha
+
+    @commit_sha.setter
+    def commit_sha(self, value: Optional[str]) -> None:
+        self._commit_sha = value
 
     def get_dict(self, default_dict: Optional[dict] = None) -> dict:
         """
