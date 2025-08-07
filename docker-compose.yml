@@ -54,3 +54,19 @@ services:
       - ./secrets/packit/dev/privkey.pem:/secrets/privkey.pem:ro,z
       - ./files/run_httpd.sh:/usr/bin/run_httpd.sh:ro,z
     user: "1024"
+
+  avant:
+    container_name: avant
+    image: quay.io/packit/avant:dev
+    command: /usr/bin/run_httpd.sh
+    depends_on:
+      - redis
+      - postgres
+    ports:
+      - 443:8443
+    environment:
+      - FORGEJO_TOKEN: lmao
+
+    volumes:
+      - ./avant:/src/avant:ro,z
+    user: "1024"
