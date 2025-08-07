@@ -10,12 +10,12 @@ from typing import ClassVar, Optional
 from celery import Task
 from celery._state import get_current_task
 from celery.signals import after_setup_logger
-from ogr import __version__ as ogr_version
 from packit import __version__ as packit_version
 from packit.exceptions import PackitException
 from sqlalchemy import __version__ as sqlal_version
 from syslog_rfc5424_formatter import RFC5424Formatter
 
+from ogr import __version__ as ogr_version
 from packit_service import __version__ as ps_version
 from packit_service.celerizer import celery_app
 from packit_service.constants import (
@@ -489,3 +489,4 @@ def get_usage_statistics() -> None:
         logger.debug(f"Getting usage data from datetime_from {day}.")
         get_usage_data(datetime_from=day)
         logger.debug("Got usage data.")
+
