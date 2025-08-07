@@ -82,7 +82,7 @@ class Comment(AbstractPRCommentEvent, ForgejoEvent):
             commit_sha=commit_sha,
             comment_object=comment_object,
         )
-        self.action = action.value
+        self.action = action
         self.base_repo_namespace = base_repo_namespace
         self.base_repo_name = base_repo_name
         self.base_ref = base_ref
