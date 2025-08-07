@@ -337,8 +337,6 @@ def update_srpm_build_state(
             event=event_dict,
         )
         if handler.pre_check(package_config, job_config, event_dict):
-            d=event.__dict__
-            d['_db_project_object'] = None
             signatures.append(handler.get_signature(event=event, job=job_config))
 
     celery_run_async(signatures=signatures)
@@ -418,8 +416,6 @@ def update_copr_build_state(
             event=event_dict,
         )
         if handler.pre_check(package_config, job_config, event_dict):
-            d=event.__dict__
-            d['_db_project_object'] = None
             signatures.append(handler.get_signature(event=event, job=job_config))
 
     celery_run_async(signatures=signatures)

@@ -6,7 +6,6 @@ from typing import Optional
 
 from ogr.abstract import CommitStatus
 from ogr.exceptions import GitlabAPIException
-
 from packit_service.worker.reporting.enums import BaseCommitStatus
 
 from .base import StatusReporter
