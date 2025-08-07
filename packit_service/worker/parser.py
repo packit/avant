@@ -1904,7 +1904,7 @@ class Parser:
         )
 
     @staticmethod
-    def parse_forgejo_pr_event(event) -> Optional[forgejo.pr.Action]:
+    def parse_forgejo_pr_event(event: dict) -> Optional[forgejo.pr.Action]:
         """
         Parse Forgejo PR action events, only triggering for relevant actions.
         Supported actions: 'opened', 'reopened', 'synchronize'.
