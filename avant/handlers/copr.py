@@ -8,25 +8,43 @@ from celery.canvas import signature
 from ogr.services.forgejo import ForgejoProject
 from ogr.services.github import GithubProject
 from ogr.services.gitlab import GitlabProject
-from packit.config import PackageConfig, JobConfig, JobConfigTriggerType
-
-from packit_service.constants import COPR_SRPM_CHROOT, COPR_API_SUCC_STATE
-from packit_service.models import BuildStatus, ProjectEventModelType, CoprBuildTargetModel
-from packit_service.service.urls import get_srpm_build_info_url, get_copr_build_info_url
-from packit_service.utils import elapsed_seconds, dump_job_config, dump_package_config, pr_labels_match_configuration
-from packit_service.worker.handlers.abstract import RetriableJobHandler, JobHandler
+from packit.config import JobConfig, JobConfigTriggerType, PackageConfig
 
 from avant.handlers.abstract import TaskName, reacts_to
-from avant.handlers.mixins import ConfigFromEventMixin, PackitAPIWithDownstreamMixin, GetCoprBuildJobHelperMixin
+from avant.handlers.mixins import (
+    ConfigFromEventMixin,
+    GetCoprBuildJobHelperMixin,
+    PackitAPIWithDownstreamMixin,
+)
+from packit_service.constants import COPR_API_SUCC_STATE, COPR_SRPM_CHROOT
+from packit_service.events import copr, forgejo
+from packit_service.models import BuildStatus, CoprBuildTargetModel, ProjectEventModelType
+from packit_service.service.urls import get_copr_build_info_url, get_srpm_build_info_url
+from packit_service.utils import (
+    dump_job_config,
+    dump_package_config,
+    elapsed_seconds,
+    pr_labels_match_configuration,
+)
 from packit_service.worker.checker.abstract import Checker
-from packit_service.worker.checker.copr import IsJobConfigTriggerMatching, IsGitForgeProjectAndEventOk, \
-    CanActorRunTestsJob, AreOwnerAndProjectMatchingJob, IsPackageMatchingJobView, BuildNotAlreadyStarted
-from packit_service.worker.handlers.mixin import GetCoprBuildJobHelperForIdMixin, GetCoprBuildEventMixin
+from packit_service.worker.checker.copr import (
+    AreOwnerAndProjectMatchingJob,
+    BuildNotAlreadyStarted,
+    CanActorRunTestsJob,
+    IsGitForgeProjectAndEventOk,
+    IsJobConfigTriggerMatching,
+    IsPackageMatchingJobView,
+)
+from packit_service.worker.handlers.abstract import JobHandler, RetriableJobHandler
+from packit_service.worker.handlers.mixin import (
+    GetCoprBuildEventMixin,
+    GetCoprBuildJobHelperForIdMixin,
+)
 from packit_service.worker.reporting import BaseCommitStatus, DuplicateCheckMode
-from packit_service.worker.result import (TaskResults)
-from packit_service.events import forgejo, copr
+from packit_service.worker.result import TaskResults
 
 logger = logging.getLogger(__name__)
+
 
 @reacts_to(forgejo.pr.Action)
 class CoprBuildHandler(
@@ -38,12 +56,12 @@ class CoprBuildHandler(
     task_name = TaskName.copr_build
 
     def __init__(
-            self,
-            package_config: PackageConfig,
-            job_config: JobConfig,
-            event: dict,
-            celery_task: Task,
-            copr_build_group_id: Optional[int] = None,
+        self,
+        package_config: PackageConfig,
+        job_config: JobConfig,
+        event: dict,
+        celery_task: Task,
+        copr_build_group_id: Optional[int] = None,
     ):
         super().__init__(
             package_config=package_config,
@@ -288,16 +306,15 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
         self.build.set_status(BuildStatus.success)
         self.handle_testing_farm()
 
-
         return TaskResults(success=True, details={})
 
     def report_successful_build(self):
         if (
-                self.copr_build_helper.job_build
-                and self.copr_build_helper.job_build.trigger == JobConfigTriggerType.pull_request
-                and self.copr_event.pr_id
-                and isinstance(self.project, (GithubProject, GitlabProject, ForgejoProject))
-                and self.job_config.notifications.pull_request.successful_build
+            self.copr_build_helper.job_build
+            and self.copr_build_helper.job_build.trigger == JobConfigTriggerType.pull_request
+            and self.copr_event.pr_id
+            and isinstance(self.project, (GithubProject, GitlabProject, ForgejoProject))
+            and self.job_config.notifications.pull_request.successful_build
         ):
             msg = (
                 f"Congratulations! One of the builds has completed. :champagne:\n\n"
@@ -352,7 +369,7 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
             return TaskResults(success=False, details={"msg": failed_msg})
 
         for build in CoprBuildTargetModel.get_all_by_build_id(
-                str(self.copr_event.build_id),
+            str(self.copr_event.build_id),
         ):
             # from waiting_for_srpm to pending
             build.set_status(BuildStatus.pending)
@@ -381,21 +398,21 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
 
         for job_config in self.copr_build_helper.job_tests_all:
             if (
-                    not job_config.skip_build
-                    and not job_config.manual_trigger
-                    # we need to check the labels here
-                    # the same way as when scheduling jobs for event
-                    and (
+                not job_config.skip_build
+                and not job_config.manual_trigger
+                # we need to check the labels here
+                # the same way as when scheduling jobs for event
+                and (
                     job_config.trigger != JobConfigTriggerType.pull_request
                     or not (job_config.require.label.present or job_config.require.label.absent)
                     or pr_labels_match_configuration(
-                pull_request=self.copr_build_helper.pull_request_object,
-                configured_labels_absent=job_config.require.label.absent,
-                configured_labels_present=job_config.require.label.present,
-            )
-            )
-                    and self.copr_event.chroot
-                    in self.copr_build_helper.build_targets_for_test_job(job_config)
+                        pull_request=self.copr_build_helper.pull_request_object,
+                        configured_labels_absent=job_config.require.label.absent,
+                        configured_labels_present=job_config.require.label.present,
+                    )
+                )
+                and self.copr_event.chroot
+                in self.copr_build_helper.build_targets_for_test_job(job_config)
             ):
                 event_dict["tests_targets_override"] = [
                     (target, job_config.identifier)
