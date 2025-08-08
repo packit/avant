@@ -169,17 +169,6 @@ class TaskWithRetry(Task):
     acks_late = True
 
 
-class BodhiTaskWithRetry(TaskWithRetry):
-    # hardcode for creating bodhi updates to account for the tagging race condition
-    max_retries = 5
-    # also disable jitter for the same reason
-    retry_jitter = False
-    retry_kwargs: ClassVar[dict] = {
-        "max_retries": max_retries,
-        "retry_jitter": retry_jitter,
-    }
-
-
 @celery_app.task(
     name=getenv("CELERY_MAIN_TASK_NAME") or CELERY_DEFAULT_MAIN_TASK_NAME,
     bind=True,
@@ -265,16 +254,6 @@ def run_copr_build_handler(
     return get_handlers_task_results(handler.run_job(), event)
 
 
-@celery_app.task(name=TaskName.installation, base=TaskWithRetry)
-def run_installation_handler(event: dict, package_config: dict, job_config: dict):
-    handler = GithubAppInstallationHandler(
-        package_config=None,
-        job_config=None,
-        event=event,
-    )
-    return get_handlers_task_results(handler.run_job(), event)
-
-
 @celery_app.task(bind=True, name=TaskName.testing_farm, base=TaskWithRetry)
 def run_testing_farm_handler(
     self,
@@ -309,78 +288,6 @@ def run_testing_farm_results_handler(
     return get_handlers_task_results(handler.run_job(), event)
 
 
-@celery_app.task(
-    bind=True,
-    name=TaskName.pull_from_upstream,
-    base=TaskWithRetry,
-    queue="long-running",
-)
-def run_pull_from_upstream_handler(
-    self,
-    event: dict,
-    package_config: dict,
-    job_config: dict,
-    sync_release_run_id: Optional[int] = None,
-):
-    handler = PullFromUpstreamHandler(
-        package_config=load_package_config(package_config),
-        job_config=load_job_config(job_config),
-        event=event,
-        sync_release_run_id=sync_release_run_id,
-        celery_task=self,
-    )
-    return get_handlers_task_results(handler.run_job(), event)
-
-
-@celery_app.task(
-    bind=True,
-    name=TaskName.vm_image_build,
-    base=TaskWithRetry,
-    queue="short-running",
-)
-def run_vm_image_build(self, event: dict, package_config: dict, job_config: dict):
-    handler = VMImageBuildHandler(
-        package_config=load_package_config(package_config),
-        job_config=load_job_config(job_config),
-        event=event,
-        celery_task=self,
-    )
-    return get_handlers_task_results(handler.run_job(), event)
-
-
-@celery_app.task(name=TaskName.vm_image_build_result, base=TaskWithRetry)
-def run_vm_image_build_result(
-    self,
-    event: dict,
-    package_config: dict,
-    job_config: dict,
-):
-    handler = VMImageBuildResultHandler(
-        package_config=load_package_config(package_config),
-        job_config=load_job_config(job_config),
-        event=event,
-    )
-    return get_handlers_task_results(handler.run_job(), event)
-
-
-@celery_app.task(
-    bind=True,
-    name="task.babysit_vm_image_build",
-    autoretry_for=(PackitVMImageBuildTimeoutException,),
-    retry_backoff=30,  # retry again in 30s, 60s, 120s, 240s...
-    retry_backoff_max=3600,  # at most, wait for an hour between retries
-    max_retries=14,  # retry 14 times; with the backoff values above this is ~8 hours
-    retry_jitter=False,  # do not jitter, as it might considerably reduce the total wait time
-)
-def babysit_vm_image_build(self, build_id: int):
-    """check status of a vm image build and update it in DB"""
-    model = VMImageBuildTargetModel.get_by_build_id(build_id)
-    if not update_vm_image_build(build_id, model):
-        raise PackitVMImageBuildTimeoutException(
-            f"No feedback for vm image build id={build_id} yet",
-        )
-
-
 def get_handlers_task_results(results: dict, event: dict) -> dict:
     # include original event to provide more info
     return {"job": results, "event": event}
@@ -404,24 +311,6 @@ def database_maintenance() -> None:
     discard_old_srpm_build_logs()
     discard_old_package_configs()
     backup()
-
-
-@celery_app.task
-def babysit_pending_vm_image_builds() -> None:
-    check_pending_vm_image_builds()
-
-
-# Usage / statistics tasks
-
-
-@celery_app.task
-def run_check_onboarded_projects() -> None:
-    known_onboarded_projects = GitProjectModel.get_known_onboarded_downstream_projects()
-    downstream_synced_projects = SyncReleaseTargetModel.get_all_downstream_projects()
-    almost_onboarded_projects = downstream_synced_projects.difference(
-        known_onboarded_projects,
-    )
-    check_onboarded_projects(almost_onboarded_projects)
 
 
 def _get_usage_interval_data(days, hours, count) -> None:

@@ -6,7 +6,7 @@ from packit_service.events.event import Event
 from packit_service.worker.handlers import JobHandler
 
 SUPPORTED_EVENTS_FOR_HANDLER = defaultdict(set)
-
+MAP_COMMENT_TO_HANDLER = defaultdict(set)
 ADMIN_ONLY_HANDLERS = defaultdict(set)
 
 
@@ -30,5 +30,7 @@ def reacts_to(event: Type[Event]):
 
 
 class TaskName(str, Enum):
-    pass
+    copr_build_start = "task.run_copr_build_start_handler"
+    copr_build_end = "task.run_copr_build_end_handler"
+    copr_build = "task.run_copr_build_handler"
 

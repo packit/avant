@@ -1,16 +1,25 @@
 import logging
-from typing import List, Optional
+from typing import Callable, List, Optional, Union
 
 import celery
 from celery import Task
-from handlers.abstract import SUPPORTED_EVENTS_FOR_HANDLER
+from packit.config import JobConfig
+
+from handlers.abstract import SUPPORTED_EVENTS_FOR_HANDLER, MAP_COMMENT_TO_HANDLER
 from packit.utils import nested_get
 
+from packit_service.constants import TASK_ACCEPTED
 from packit_service.events import forgejo, testing_farm
 from packit_service.events.event import Event
+from packit_service.events.event_data import EventData
 from packit_service.models import TFTTestRunTargetModel
+from packit_service.utils import get_packit_commands_from_comment
+from packit_service.worker.handlers import TestingFarmHandler, CoprBuildHandler
 from packit_service.worker.handlers.abstract import JobHandler
+from packit_service.worker.helpers.build import CoprBuildJobHelper
+from packit_service.worker.helpers.testing_farm import TestingFarmJobHelper
 from packit_service.worker.parser import Parser
+from packit_service.worker.reporting import BaseCommitStatus
 from packit_service.worker.result import TaskResults
 
 logger = logging.getLogger(__name__)
@@ -113,8 +122,49 @@ class Jobs:
         logger.debug("Tasks were sent to Celery.")
         return signatures
 
-    def report_task_accepted(self):
-        pass
+    def report_task_accepted(
+        self, handler_kls: type[JobHandler], job_config: JobConfig, update_feedback_time: Callable
+    ):
+        number_of_build_targets = None
+        if handler_kls not in (CoprBuildHandler, TestingFarmHandler):
+            return
 
-    def initalize_job_helper_for_reporting(self):
-        pass
+        job_helper = self.initalize_job_helper_for_reporting(handler_kls, job_config)
+
+        if isinstance(job_helper, CoprBuildJobHelper):
+            number_of_build_targets = len(job_helper.build_targets)
+
+        job_helper.report_status_to_configured_job(
+            description=TASK_ACCEPTED,
+            state=BaseCommitStatus.pending,
+            url="",
+            update_feedback_time=update_feedback_time,
+        )
+
+    def initalize_job_helper_for_reporting(
+        self, handler_kls: type[JobHandler], job_config: JobConfig
+    ):
+        params = {
+            "service_config": self.service_config,
+            "package_config": None,
+            "project": self.event.project,
+            "metadata": EventData.from_event_dict(self.event.get_dict()),
+            "db_project_object": self.event.db_project_object,
+            "job_config": job_config,
+        }
+
+        helper_kls: type[Union[TestingFarmJobHelper, CoprBuildJobHelper]]
+
+        if handler_kls == TestingFarmHandler:
+            helper_kls = TestingFarmJobHelper
+        elif handler_kls == CoprBuildHandler:
+            helper_kls = CoprBuildJobHelper
+
+        params.update(
+            {
+                "build_targets_override": self.event.build_targets_override,
+                "test_targets_override": self.event.test_targets_override,
+            },
+        )
+
+        return helper_kls
