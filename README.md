@@ -8,4 +8,4 @@ service to make onboarding packages to Fedora easier.
 - [ ] Reruns
 - [x] Status Reporting
 - [ ] Unit tests
-- [ ] Commit Status
+- [x] Commit Status
