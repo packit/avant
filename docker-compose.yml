@@ -65,7 +65,7 @@ services:
     ports:
       - 443:8443
     environment:
-      - FORGEJO_TOKEN: lmao
+      - FORGEJO_TOKEN: token_here
 
     volumes:
       - ./avant:/src/avant:ro,z
