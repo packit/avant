@@ -421,62 +421,15 @@ class SteveJobs:
         # Handle Forgejo events first, regardless of whether they're comment events
         if isinstance(self.event, forgejo.pr.Comment) or isinstance(self.event, forgejo.pr.Action):
             logging.debug(f"Processing Forgejo PR event")
-
-            comment_lines = self.event.body.strip().split("\n")
-            for line in comment_lines:
-                line = line.strip()
-                if "Package Name:" in line:
-                    parts = line.split("Package Name:", 1)
-                    if len(parts) == 2:
-                        extracted_name = parts[1].strip()
-                        if extracted_name:
-                            package_name = extracted_name
-                            specfile_path = f"{extracted_name}.spec"
-                elif "package_name:" in line:
-                    # Keep backward compatibility
-                    parts = line.split("package_name:", 1)
-                    if len(parts) == 2:
-                        extracted_name = parts[1].strip()
-                        if extracted_name:
-                            package_name = extracted_name
-                            specfile_path = f"{extracted_name}.spec"
-                elif "Version:" in line:
-                    parts = line.split("Version:", 1)
-                    if len(parts) == 2:
-                        package_version = parts[1].strip()
-                elif "Description:" in line:
-                    parts = line.split("Description:", 1)
-                    if len(parts) == 2:
-                        package_description = parts[1].strip()
-                elif "FAS username:" in line:
-                    parts = line.split("FAS username:", 1)
-                    if len(parts) == 2:
-                        fas_username = parts[1].strip()
-                elif "License:" in line:
-                    parts = line.split("License:", 1)
-                    if len(parts) == 2:
-                        package_license = parts[1].strip()
-
-            # Create common package config (will use defaults if no comment parsing occurred)
-            common_package_config = CommonPackageConfig(
-                specfile_path=specfile_path,
-                _targets=["fedora-rawhide-x86_64"],
-            )
-
-            self.event._package_config = PackageConfig(
-                packages={package_name: common_package_config},
-                jobs=[
-                    JobConfig(
-                        type=JobType.copr_build,
-                        trigger=JobConfigTriggerType.pull_request,
-                        packages={package_name: common_package_config},
-                    ),
-                    JobConfig(
-                        type=JobType.tests,
-                        trigger=JobConfigTriggerType.pull_request,
-                        packages={package_name: common_package_config},
-                    ),
-                ],
+            # For PR events, we need to use the commit SHA from the source project
+            # instead of base_ref which refers to the target project
+            pr = self.event.project.get_pr(self.event.pr_id)
+            source_commit = pr.head_commit
+            PackageConfigGetter.get_package_config_from_repo(
+                project=self.event.project,
+                reference=source_commit,
+                pr_id=self.event.pr_id,
+                fail_when_missing=False,
             )
 
             return True
