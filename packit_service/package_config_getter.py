@@ -4,17 +4,20 @@
 import logging
 from typing import Optional
 
-from ogr.abstract import GitProject
 from packit.config import (
+    CommonPackageConfig,
+    JobConfig,
+    JobConfigTriggerType,
+    JobType,
     PackageConfig,
-    get_package_config_from_repo,
 )
 from packit.exceptions import (
     PackitConfigException,
     PackitMissingConfigException,
 )
+from specfile.specfile import Specfile
 
-from packit_service.config import ServiceConfig
+from ogr.abstract import GitProject
 from packit_service.constants import (
     CONTACTS_URL,
     DOCS_HOW_TO_CONFIGURE_URL,
@@ -42,19 +45,69 @@ class PackageConfigGetter:
         if not base_project and not project:
             return None
 
-        project_to_search_in = base_project or project
         try:
-            package_config: PackageConfig = get_package_config_from_repo(
-                project=project_to_search_in,
-                ref=reference,
-                package_config_path=ServiceConfig.get_service_config().package_config_path_override,
+            logger.debug(f"Getting PR {pr_id} from project: {project.full_repo_name}")
+            pull_request = project.get_pr(pr_id)
+            logger.debug(f"Got pull request: {pull_request}")
+            source_project = pull_request.source_project
+            logger.debug(f"Source project: {source_project.full_repo_name}")
+            logger.debug(f"Target project: {pull_request.target_project.full_repo_name}")
+            # Use the reference passed in (should be head commit for PR events)
+            logger.debug(f"Using reference: {reference} for source project search")
+            logger.debug(
+                f"Searching for spec files in source project: {source_project.full_repo_name} on commit {reference}"
             )
-            if not package_config and fail_when_missing:
-                raise PackitMissingConfigException(
-                    f"No config file for packit (e.g. `.packit.yaml`) found in "
-                    f"{project_to_search_in.full_repo_name} on commit {reference}",
+            spec_files = list(source_project.get_files(ref=reference, filter_regex=".spec"))
+            if not spec_files:
+                raise Exception(
+                    f"No spec files found in {source_project.full_repo_name} on commit {reference}",
                 )
+            spec_path = spec_files[0]
+            logger.debug(
+                f"Found spec file: {spec_path} in {source_project.full_repo_name} on commit {reference}"
+            )
+            spec_content = source_project.get_file_content(
+                path=spec_path,
+                ref=reference,
+            )
+            specfile = Specfile(content=spec_content, sourcedir="/tmp/sources")
+            if not specfile:
+                raise PackitConfigException(
+                    f"Failed to parse spec file {spec_path} in {source_project.full_repo_name} on commit {reference}",
+                )
+
+            package_name = specfile.name
+            logger.debug(f"Parsed spec file: {specfile}, package name: {package_name}")
+
+            package_config = PackageConfig(
+                packages={
+                    package_name: CommonPackageConfig(specfile_path=spec_path),
+                },
+                jobs=[
+                    JobConfig(
+                        type=JobType.copr_build,
+                        trigger=JobConfigTriggerType.pull_request,
+                        packages={
+                            package_name: CommonPackageConfig(
+                                _targets=["fedora-rawhide"],
+                                specfile_path=spec_path,
+                            ),
+                        },
+                    ),
+                    JobConfig(
+                        type=JobType.tests,
+                        trigger=JobConfigTriggerType.pull_request,
+                        packages={
+                            package_name: CommonPackageConfig(
+                                _targets=["fedora-rawhide"],
+                                specfile_path=spec_path,
+                            )
+                        },
+                    ),
+                ],
+            )
         except PackitConfigException as ex:
+            # Error handling code remains the same
             message = (
                 f"{ex}\n\n"
                 if isinstance(ex, PackitMissingConfigException)
@@ -83,3 +136,4 @@ class PackageConfigGetter:
             raise ex
 
         return package_config
+

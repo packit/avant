@@ -18,7 +18,7 @@ from packit.exceptions import (
     PackitCoprProjectException,
     PackitCoprSettingsException,
 )
-from packit.utils.source_script import create_source_script
+from packit_service.utils import create_source_script
 
 from ogr.abstract import GitProject
 from ogr.exceptions import GitForgeInternalError, OgrNetworkError
