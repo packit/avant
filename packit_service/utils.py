@@ -299,9 +299,7 @@ def create_new_forgejo_project_for_package(namespace: str, package_name: str):
     pass
 
 
-CUSTOM_SOURCE_SCRIPT = """
-#!/bin/sh
-
+CUSTOM_SOURCE_SCRIPT = """#!/bin/sh
 set -e
 
 git config --global user.email "hello@packit.dev"
@@ -321,52 +319,62 @@ git checkout pr-{pr_id}
 
 echo "Repository checkout completed"
 
-# Find spec file
-specfile=$(find . -name "*.spec" -type f | head -1)
-if [ -z "$specfile" ]; then
-    echo "Error: No spec file found in repository"
-    exit 1
+# Find package directory and spec file
+package_name="{package}"
+echo "Looking for package: $package_name"
+
+if [ -n "$package_name" ] && [ -d "$package_name" ]; then
+    echo "Found package directory: $package_name"
+    cd "$package_name"
+    specfile="$package_name.spec"
+    if [ ! -f "$specfile" ]; then
+        specfile=$(find . -maxdepth 1 -name "*.spec" -type f | head -1)
+        if [ -z "$specfile" ]; then
+            echo "Error: No spec file found in $package_name directory"
+            exit 1
+        fi
+    fi
+else
+    # Find spec file in current directory or subdirectories
+    specfile=$(find . -name "*.spec" -type f | head -1)
+    if [ -z "$specfile" ]; then
+        echo "Error: No spec file found in repository"
+        exit 1
+    fi
+    # Change to directory containing the spec file
+    specdir=$(dirname "$specfile")
+    if [ "$specdir" != "." ]; then
+        cd "$specdir"
+        specfile=$(basename "$specfile")
+    fi
 fi
 
 echo "Found spec file: $specfile"
+echo "Working in directory: $(pwd)"
 
 # Run spectool to download sources
 echo "Running spectool to download sources..."
 spectool -g -R "$specfile"
 
-# Create result directory structure
+# Create result directory and copy files
 mkdir -p "$resultdir"
-
-# Copy spec file to result directory
 cp "$specfile" "$resultdir/"
 
-# Copy all patch files to result directory
+# Copy patch files
 echo "Copying patch files..."
-find . -name "*.patch" -type f -exec cp {{}} "$resultdir/" \;
-
-# Copy downloaded sources to result directory
-echo "Copying downloaded sources..."
-find . -name "*.tar.*" -o -name "*.tgz" -o -name "*.zip" -o -name "*.bz2" -o -name "*.xz" | while read -r source; do
-    if [ -f "$source" ]; then
-        cp "$source" "$resultdir/"
-        echo "Copied source: $(basename "$source")"
+for patch in *.patch; do
+    if [ -f "$patch" ]; then
+        cp "$patch" "$resultdir/"
     fi
 done
 
-# Copy any other source files that might be in the repo
-echo "Copying additional source files..."
-while IFS= read -r line; do
-    case "$line" in
-        Source*:*)
-            sourcefile=$(echo "$line" | sed 's/^Source[0-9]*:[[:space:]]*//' | sed 's/[[:space:]]*$//')
-            # Skip URLs, only copy local files
-            if [ -f "$sourcefile" ] && ! echo "$sourcefile" | grep -q "^https\?://"; then
-                cp "$sourcefile" "$resultdir/"
-                echo "Copied additional source: $sourcefile"
-            fi
-            ;;
-    esac
-done < "$specfile"
+# Copy source files
+echo "Copying source files..."
+for source in *.tar.gz *.tar.bz2 *.tar.xz *.zip *.tgz *.tbz2 *.txz; do
+    if [ -f "$source" ]; then
+        cp "$source" "$resultdir/"
+    fi
+done
 
 # Clean up
 cd "$resultdir"
@@ -390,7 +398,6 @@ def create_source_script(
     package: Optional[str] = None,
     merged_ref: Optional[str] = None,
 ):
-    # Build git clone options
     clone_options = []
     if ref:
         clone_options += ["--branch", ref]
@@ -398,7 +405,6 @@ def create_source_script(
         # For PR, we'll fetch the PR ref specifically
         clone_options += ["--depth", "1"]
 
-    # Build additional options for the script
     script_vars = {
         "repo_url": url,
         "clone_options": " ".join(clone_options),

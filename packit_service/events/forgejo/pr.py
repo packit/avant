@@ -91,7 +91,7 @@ class Comment(AbstractPRCommentEvent, ForgejoEvent):
         self.actor = actor
         self.identifier = str(pr_id)
         self.git_ref = None
-        self.pr_id = pr_id
+        self._pr_id = pr_id
 
     @classmethod
     def event_type(cls) -> str:
@@ -107,7 +107,7 @@ class Comment(AbstractPRCommentEvent, ForgejoEvent):
         result = CommentEvent.get_dict(self, default_dict=default_dict)
         result.pop("_comment_object")
         result["action"] = self.action.value
-        result["pr_id"] = self.pr_id
+        result["pr_id"] = self._pr_id
         result["commit_sha"] = self._commit_sha
         return result
 
