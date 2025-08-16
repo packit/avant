@@ -46,94 +46,55 @@ class PackageConfigGetter:
             return None
 
         try:
-            logger.debug(f"Getting PR {pr_id} from project: {project.full_repo_name}")
             pull_request = project.get_pr(pr_id)
-            logger.debug(f"Got pull request: {pull_request}")
             source_project = pull_request.source_project
-            logger.debug(f"Source project: {source_project.full_repo_name}")
-            logger.debug(f"Target project: {pull_request.target_project.full_repo_name}")
-            # Use the reference passed in (should be head commit for PR events)
-            logger.debug(f"Using reference: {reference} for source project search")
-            logger.debug(
-                f"Searching for spec files in source project: {source_project.full_repo_name} on commit {reference}"
-            )
             spec_files = list(source_project.get_files(ref=reference, filter_regex=".spec"))
             if not spec_files:
                 raise Exception(
                     f"No spec files found in {source_project.full_repo_name} on commit {reference}",
                 )
-            spec_path = spec_files[0]
-            logger.debug(
-                f"Found spec file: {spec_path} in {source_project.full_repo_name} on commit {reference}"
-            )
-            spec_content = source_project.get_file_content(
-                path=spec_path,
-                ref=reference,
-            )
-            specfile = Specfile(content=spec_content, sourcedir="/tmp/sources")
-            if not specfile:
-                raise PackitConfigException(
-                    f"Failed to parse spec file {spec_path} in {source_project.full_repo_name} on commit {reference}",
+            packages = {}
+            for spec_file in spec_files:
+                spec_path = spec_file
+                logger.debug(
+                    f"Found spec file: {spec_path} in {source_project.full_repo_name} on commit {reference}"
                 )
+                spec_content = source_project.get_file_content(
+                    path=spec_path,
+                    ref=reference,
+                )
+                specfile = Specfile(content=spec_content, sourcedir="/tmp/sources")
+                if not specfile:
+                    raise PackitConfigException(
+                        f"Failed to parse spec file {spec_path} in {source_project.full_repo_name} on commit {reference}",
+                    )
 
-            package_name = specfile.name
-            logger.debug(f"Parsed spec file: {specfile}, package name: {package_name}")
+                packages[specfile.name] = CommonPackageConfig(specfile_path=spec_path, _targets=["fedora-rawhide-x86_64"])
 
             package_config = PackageConfig(
-                packages={
-                    package_name: CommonPackageConfig(specfile_path=spec_path),
-                },
+                packages=packages,
                 jobs=[
                     JobConfig(
                         type=JobType.copr_build,
                         trigger=JobConfigTriggerType.pull_request,
-                        packages={
-                            package_name: CommonPackageConfig(
-                                _targets=["fedora-rawhide"],
-                                specfile_path=spec_path,
-                            ),
-                        },
+                        packages=packages,
                     ),
                     JobConfig(
                         type=JobType.tests,
                         trigger=JobConfigTriggerType.pull_request,
-                        packages={
-                            package_name: CommonPackageConfig(
-                                _targets=["fedora-rawhide"],
-                                specfile_path=spec_path,
-                            )
-                        },
+                        packages=packages,
                     ),
                 ],
             )
         except PackitConfigException as ex:
-            # Error handling code remains the same
             message = (
                 f"{ex}\n\n"
                 if isinstance(ex, PackitMissingConfigException)
-                else f"Failed to load packit config file:\n```\n{ex}\n```\n"
-            )
-
-            message += (
-                "For more info, please check out "
-                f"[the documentation]({DOCS_HOW_TO_CONFIGURE_URL}) "
-                "or [contact the Packit team]"
-                f"({CONTACTS_URL}). You can also use "
-                f"our CLI command [`config validate`]({DOCS_VALIDATE_CONFIG}) or our "
-                f"[pre-commit hooks]({DOCS_VALIDATE_HOOKS}) for validation of the configuration."
+                else f"No spec files found:\n```\n{ex}\n```\n"
             )
 
             if pr_id:
                 comment_without_duplicating(body=message, pr_or_issue=project.get_pr(pr_id))
-            elif created_issue := create_issue_if_needed(
-                project,
-                title="Invalid config",
-                message=message,
-            ):
-                logger.debug(
-                    f"Created issue for invalid packit config: {created_issue.url}",
-                )
             raise ex
 
         return package_config
-
