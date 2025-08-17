@@ -4,40 +4,35 @@
 import logging
 import os
 from datetime import datetime, timezone
-import re
 from typing import Optional
-from packit.config.common_package_config import CommonPackageConfig
+
 from celery import Task, signature
-from ogr.abstract import GitProject
-from ogr.services.github import GithubProject
-from ogr.services.gitlab import GitlabProject
-from ogr.services.forgejo import ForgejoProject
 from packit.config import (
     JobConfig,
     JobConfigTriggerType,
     JobType,
 )
+from packit.config.common_package_config import CommonPackageConfig
 from packit.config.package_config import PackageConfig
-from packit_service.worker.helpers.build.copr_build import CoprBuildJobHelper
-from packit_service import sentry_integration
-from packit_service.config import ServiceConfig
+
+from ogr.abstract import GitProject
+from ogr.services.forgejo import ForgejoProject
+from ogr.services.github import GithubProject
+from ogr.services.gitlab import GitlabProject
 from packit_service.constants import (
     COPR_API_SUCC_STATE,
     COPR_SRPM_CHROOT,
 )
-from packit_service.events import abstract, copr, forgejo, github, gitlab
+from packit_service.events import abstract, copr, forgejo
 from packit_service.models import (
     BuildStatus,
     CoprBuildTargetModel,
-    ProjectEventModelType,
 )
-from packit_service.package_config_getter import PackageConfigGetter
 from packit_service.service.urls import get_copr_build_info_url, get_srpm_build_info_url
 from packit_service.utils import (
     dump_job_config,
     dump_package_config,
     elapsed_seconds,
-    pr_labels_match_configuration,
 )
 from packit_service.worker.checker.abstract import Checker
 from packit_service.worker.checker.copr import (
@@ -72,9 +67,6 @@ logger = logging.getLogger(__name__)
 
 @configured_as(job_type=JobType.copr_build)
 @run_for_comment(command="build")
-@run_for_comment(command="copr-build")
-@run_for_comment(command="rebuild-failed")
-@run_for_check_rerun(prefix="rpm-build")
 @reacts_to(forgejo.pr.Comment)
 @reacts_to(forgejo.pr.Action)
 @reacts_to(abstract.comment.Commit)
@@ -109,7 +101,7 @@ class CoprBuildHandler(
             IsGitForgeProjectAndEventOk,
             CanActorRunTestsJob,
         )
-    
+
     def run(self) -> TaskResults:
         # [XXX] For now cancel only when an environment variable is defined,
         # should allow for less stressful testing and also optionally turning
@@ -426,18 +418,20 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
     def handle_fedora_review(self):
         """
         Handle fedora-review by constructing the review URL and posting it as a comment.
-        
+
         The URL follows the pattern:
         https://download.copr.fedorainfracloud.org/results/{owner}/{project}/{chroot}/{build_id:08d}-{pkg}/fedora-review/review.txt
         """
         logger.debug(f"handle_fedora_review called for build {self.copr_event.build_id}")
         logger.debug(f"job_build: {self.copr_build_helper.job_build}")
-        logger.debug(f"trigger: {self.copr_build_helper.job_build.trigger if self.copr_build_helper.job_build else None}")
+        logger.debug(
+            f"trigger: {self.copr_build_helper.job_build.trigger if self.copr_build_helper.job_build else None}"
+        )
         logger.debug(f"pr_id: {self.copr_event.pr_id}")
         logger.debug(f"project type: {type(self.project)}")
-        
+
         if (
-            # Only post fedora-review for pull requests  
+            # Only post fedora-review for pull requests
             self.copr_build_helper.job_build
             and self.copr_build_helper.job_build.trigger == JobConfigTriggerType.pull_request
             and self.copr_event.pr_id
@@ -452,7 +446,7 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                 f"{self.copr_event.build_id:08d}-{self.copr_event.pkg}/"
                 f"fedora-review/review.txt"
             )
-            
+
             msg = (
                 f"📋 **Fedora Review Results Available**\n\n"
                 f"The fedora-review has completed for the {self.copr_event.chroot} build.\n\n"
@@ -460,9 +454,11 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                 f"This report contains automated package review checks and recommendations. "
                 f"Please review the results for any potential issues or improvements."
             )
-            
+
             try:
-                logger.debug(f"Attempting to post fedora-review comment for build {self.copr_event.build_id}")
+                logger.debug(
+                    f"Attempting to post fedora-review comment for build {self.copr_event.build_id}"
+                )
                 logger.debug(f"Review URL: {review_url}")
                 logger.debug(f"Comment message: {msg}")
                 result = self.copr_build_helper.status_reporter.comment(
@@ -470,7 +466,9 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                     duplicate_check=DuplicateCheckMode.check_last_comment,
                 )
                 logger.debug(f"Comment method returned: {result}")
-                logger.debug(f"Successfully posted fedora-review comment for build {self.copr_event.build_id}")
+                logger.debug(
+                    f"Successfully posted fedora-review comment for build {self.copr_event.build_id}"
+                )
             except Exception as e:
                 logger.warning(f"Failed to post fedora-review comment: {e}")
                 logger.exception("Full traceback for fedora-review comment failure")
