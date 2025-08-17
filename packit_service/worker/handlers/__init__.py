@@ -23,6 +23,7 @@ from packit_service.worker.handlers.testing_farm import (
     TestingFarmHandler,
     TestingFarmResultsHandler,
 )
+from packit_service.worker.handlers.submit import SubmitPackageHandler
 
 __all__ = [
     Handler.__name__,
@@ -33,4 +34,5 @@ __all__ = [
     DownstreamTestingFarmResultsHandler.__name__,
     TestingFarmHandler.__name__,
     TestingFarmResultsHandler.__name__,
+    SubmitPackageHandler.__name__,
 ]
