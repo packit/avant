@@ -1,5 +1,3 @@
-version: "2"
-
 services:
   tokman:
     image: quay.io/packit/tokman
@@ -11,9 +9,9 @@ services:
       TOKMAN_CONFIG: /config/config.py
       BIND_ADDR: 0.0.0.0:8000
     volumes:
-      - ./secrets/packit/dev/tokman-files:/config:ro,z
-      - ./secrets/packit/dev/tokman-files:/access_tokens:ro,z
-      - ./secrets/packit/dev/:/secrets:ro,z
+      - ./secrets/packit/dev/tokman-files:/config:ro
+      - ./secrets/packit/dev/tokman-files:/access_tokens:ro
+      - ./secrets/packit/dev/:/secrets:ro
 
   redis:
     image: quay.io/sclorg/redis-6-c9s
@@ -67,7 +65,6 @@ services:
       resources:
         limits:
           memory: 4GB
-          #cpus: "0.3"
         reservations:
           memory: 2G
     healthcheck:
@@ -76,10 +73,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    # volumes:
-    # a file with packit.conf content from
-    # https://github.com/packit/deployment/blob/main/openshift/postgres.yml.j2#L84
-    # - ./secrets/packit/dev/postgres-config:/opt/app-root/src/postgresql-cfg/packit.conf:ro,Z
 
   worker:
     container_name: worker
@@ -111,17 +104,17 @@ services:
       AWS_ACCESS_KEY_ID: ""
       AWS_SECRET_ACCESS_KEY: ""
       GIT_SSH_COMMAND: "ssh -F /home/packit/.ssh/config"
-      #SQLALCHEMY_ECHO: 1
+      FORGEJO_TOKEN: d93cb7c9d9b90b8ec6986e4d4541c85ba155f55c
     volumes:
-      - ../packit/packit:/usr/local/lib/python3.13/site-packages/packit:ro,z
-      - ./packit_service:/usr/local/lib/python3.13/site-packages/packit_service:ro,z
-      - ./files/run_worker.sh:/usr/bin/run_worker.sh:ro,Z
-      - ./secrets/packit/dev/packit-service.yaml:/home/packit/.config/packit-service.yaml:ro,z
-      - ./secrets/packit/dev/copr:/home/packit/.config/copr:ro,z
-      - ./secrets/packit/dev/ssh_config:/packit-ssh/config:ro,z
-      - ./secrets/packit/dev/id_ed25519.pub:/packit-ssh/id_ed25519.pub:ro,z
-      - ./secrets/packit/dev/id_ed25519:/packit-ssh/id_ed25519:ro,z
-      - ./secrets/packit/dev/fedora.keytab:/secrets/fedora.keytab:ro,z
+      - ../packit/packit:/usr/local/lib/python3.13/site-packages/packit:ro
+      - ./packit_service:/usr/local/lib/python3.13/site-packages/packit_service:ro
+      - ./files/run_worker.sh:/usr/bin/run_worker.sh:ro
+      - ./secrets/packit/dev/packit-service.yaml:/home/packit/.config/packit-service.yaml:ro
+      - ./secrets/packit/dev/copr:/home/packit/.config/copr:ro
+      - ./secrets/packit/dev/ssh_config:/packit-ssh/config:ro
+      - ./secrets/packit/dev/id_ed25519.pub:/packit-ssh/id_ed25519.pub:ro
+      - ./secrets/packit/dev/id_ed25519:/packit-ssh/id_ed25519:ro
+      - ./secrets/packit/dev/fedora.keytab:/secrets/fedora.keytab:ro
     user: "1024"
 
   fluentd:
@@ -134,8 +127,7 @@ services:
     ports:
       - 5140:5140/udp
     volumes:
-      - ./secrets/packit/dev/fluentd-config:/fluentd/etc/fluent.conf:ro,Z
-    #       - ./logs:/var/log/packit:rw,Z
+      - ./secrets/packit/dev/fluentd-config:/fluentd/etc/fluent.conf:ro
     user: "1024"
 
   service:
@@ -146,6 +138,7 @@ services:
       args:
         SOURCE_BRANCH: main
     image: quay.io/packit/packit-service:dev
+    userns_mode: "host"
     command: /usr/bin/run_httpd.sh
     depends_on:
       redis:
@@ -153,10 +146,6 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      # Port 443 is needed here because the certificate we have is bundled with it
-      # otherwise dashboard.localhost can not reach service.localhost/api
-      # docker-compose needs access to ports lower than 1024:
-      # echo "net.ipv4.ip_unprivileged_port_start=443" > /etc/sysctl.d/docker-compose.conf; sysctl --system
       - 443:8443
     environment:
       DEPLOYMENT: dev
@@ -165,30 +154,17 @@ services:
       POSTGRESQL_PASSWORD: secret-password
       POSTGRESQL_HOST: postgres
       POSTGRESQL_DATABASE: packit
-      #SQLALCHEMY_ECHO: 1
     volumes:
-      - ./packit_service:/src/packit_service:ro,z
-      - ./alembic:/src/alembic:rw,z
-      # There's no secrets/ by default. You have to create (or symlink to other dir) it yourself.
-      # Make sure to set `command_handler: local` since there is no kube in d-c
-      - ./secrets/packit/dev/packit-service.yaml:/home/packit/.config/packit-service.yaml:ro,z
-      - ./secrets/packit/dev/fedora.keytab:/secrets/fedora.keytab:ro,z
-      - ./secrets/packit/dev/fullchain.pem:/secrets/fullchain.pem:ro,z
-      - ./secrets/packit/dev/privkey.pem:/secrets/privkey.pem:ro,z
-      - ./files/run_httpd.sh:/usr/bin/run_httpd.sh:ro,z
+      - ./packit_service:/src/packit_service:ro
+      - ./alembic:/src/alembic:rw
+      - ./secrets/packit/dev/packit-service.yaml:/home/packit/.config/packit-service.yaml:ro
+      - ./secrets/packit/dev/fedora.keytab:/secrets/fedora.keytab:ro
+      - ./secrets/packit/dev:/secrets:ro
+      - ./files/run_httpd.sh:/usr/bin/run_httpd.sh:ro
     user: "1024"
 
   dashboard:
     container_name: dashboard
-    # To use dashboard on localhost and to make it connect to service.localhost you need to:
-    #   1. change API_STG in packit/dashboard/Makefile
-    #        API_STG = "https://service.localhost/api"
-    #      change VITE_API_URL in packit/dashboard/Dockerfile
-    #        ARG VITE_API_URL=https://service.localhost/api
-    #   2. rebuild dashboard with `make build-stg`
-    #   3. in packit/packit-service/secrets/packit/dev/packit-service.yaml you need
-    #        server_name: service.localhost
-    #        dashboard_url: https://dashboard.localhost:8443
     image: quay.io/packit/dashboard:stg
     command: /usr/bin/run_httpd.sh
     depends_on:
@@ -203,19 +179,15 @@ services:
       POSTGRESQL_PASSWORD: secret-password
       POSTGRESQL_HOST: postgres
       POSTGRESQL_DATABASE: packit
-      #SQLALCHEMY_ECHO: 1
     volumes:
-      - ./secrets/packit/dev/packit-service.yaml:/home/packit_dashboard/.config/packit-service.yaml:ro,z
-      - ./secrets/packit/dev/fedora.keytab:/secrets/fedora.keytab:ro,z
-      - ./secrets/packit/dev/fullchain.pem:/secrets/fullchain.pem:ro,z
-      - ./secrets/packit/dev/privkey.pem:/secrets/privkey.pem:ro,z
+      - ./secrets/packit/dev/packit-service.yaml:/home/packit_dashboard/.config/packit-service.yaml:ro
+      - ./secrets/packit/dev/fedora.keytab:/secrets/fedora.keytab:ro
+      - ./secrets/packit/dev/fullchain.pem:/secrets/fullchain.pem:ro
+      - ./secrets/packit/dev/privkey.pem:/secrets/privkey.pem:ro
     user: "1024"
 
   fedora-messaging:
     container_name: fedora-messaging
-    # If you want to test your changes in packit-service-fedmsg,
-    # run 'make build' in cloned packit-service-fedmsg
-    # and change this to :dev
     image: quay.io/packit/packit-service-fedmsg:stg
     depends_on:
       redis:
@@ -225,8 +197,7 @@ services:
       FEDORA_MESSAGING_CONF: /home/packit/.config/fedora.toml
       REDIS_SERVICE_HOST: redis
     volumes:
-      # get it from secrets
-      - ./secrets/packit/dev/fedora.toml:/home/packit/.config/fedora.toml:ro,Z
+      - ./secrets/packit/dev/fedora.toml:/home/packit/.config/fedora.toml:ro
     user: "1024"
 
   adminer:
@@ -266,11 +237,11 @@ services:
       CELERY_RETRY_LIMIT: 0
       PUSHGATEWAY_ADDRESS: ""
     volumes:
-      - ./packit_service:/usr/local/lib/python3.13/site-packages/packit_service:ro,z
-      - ./secrets/packit/dev/packit-service.yaml:/home/packit/.config/packit-service.yaml:ro,z
-      - ./secrets/packit/dev/copr:/home/packit/.config/copr:ro,z
-      - ./secrets/packit/dev/ssh_config:/packit-ssh/config:ro,z
-      - ./secrets/packit/dev/id_ed25519.pub:/packit-ssh/id_ed25519.pub:ro,z
-      - ./secrets/packit/dev/id_ed25519:/packit-ssh/id_ed25519:ro,z
-      - ./secrets/packit/dev/fedora.keytab:/secrets/fedora.keytab:ro,z
+      - ./packit_service:/usr/local/lib/python3.13/site-packages/packit_service:ro
+      - ./secrets/packit/dev/packit-service.yaml:/home/packit/.config/packit-service.yaml:ro
+      - ./secrets/packit/dev/copr:/home/packit/.config/copr:ro
+      - ./secrets/packit/dev/ssh_config:/packit-ssh/config:ro
+      - ./secrets/packit/dev/id_ed25519.pub:/packit-ssh/id_ed25519.pub:ro
+      - ./secrets/packit/dev/id_ed25519:/packit-ssh/id_ed25519:ro
+      - ./secrets/packit/dev/fedora.keytab:/secrets/fedora.keytab:ro
     user: "1024"

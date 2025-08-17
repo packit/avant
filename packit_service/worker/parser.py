@@ -32,7 +32,6 @@ from packit_service.events import (
     openscanhub,
     pagure,
     testing_farm,
-    vm_image,
     forgejo
 )
 from packit_service.events.enums import (
@@ -49,7 +48,7 @@ from packit_service.models import (
     TFTTestRunTargetModel,
 )
 from packit_service.worker.handlers.abstract import MAP_CHECK_PREFIX_TO_HANDLER
-from packit_service.worker.helpers.build import CoprBuildJobHelper, KojiBuildJobHelper
+from packit_service.worker.helpers.build import CoprBuildJobHelper
 from packit_service.worker.helpers.testing_farm import TestingFarmClient
 from packit_service.worker.result import TaskResults
 
@@ -108,39 +107,11 @@ class Parser:
     ) -> Optional[
         Union[
             abstract.comment.Commit,
-            anitya.NewHotness,
-            anitya.VersionUpdate,
             copr.CoprBuild,
-            github.check.Commit,
-            github.check.PullRequest,
-            github.check.Release,
-            github.pr.Comment,
-            github.pr.Action,
-            github.issue.Comment,
-            github.installation.Installation,
-            github.push.Commit,
-            github.release.Release,
-            gitlab.issue.Comment,
-            gitlab.mr.Comment,
-            gitlab.mr.Action,
-            gitlab.pipeline.Pipeline,
-            gitlab.push.Commit,
-            gitlab.push.Tag,
-            gitlab.release.Release,
-            koji.result.Build,
-            koji.tag.Build,
-            koji.result.Task,
-            openscanhub.task.Finished,
-            openscanhub.task.Started,
-            pagure.pr.Comment,
-            pagure.pr.Flag,
-            pagure.pr.Action,
-            pagure.push.Commit,
             testing_farm.Result,
-            vm_image.Result,
+            forgejo.pr.Action,
+            forgejo.pr.Comment,
             forgejo.push.Commit,
-            forgejo.issue.Comment,
-            forgejo.pr.Action
         ]
     ]:
         """
@@ -162,37 +133,12 @@ class Parser:
         for response in (
             parser(event)
             for parser in (
-                Parser.parse_pr_event,
-                Parser.parse_pull_request_comment_event,
-                Parser.parse_issue_comment_event,
-                Parser.parse_release_event,
-                Parser.parse_github_push_event,
-                Parser.parse_check_rerun_event,
-                Parser.parse_installation_event,
+               
                 Parser.parse_testing_farm_results_event,
                 Parser.parse_copr_event,
-                Parser.parse_mr_event,
-                Parser.parse_koji_task_event,
-                Parser.parse_koji_build_event,
-                Parser.parse_koji_build_tag_event,
-                Parser.parse_merge_request_comment_event,
-                Parser.parse_gitlab_issue_comment_event,
-                Parser.parse_gitlab_commit_comment_event,
-                Parser.parse_gitlab_push_event,
-                Parser.parse_pipeline_event,
-                Parser.parse_pagure_push_event,
-                Parser.parse_pagure_pr_flag_event,
-                Parser.parse_pagure_pull_request_comment_event,
-                Parser.parse_new_hotness_update_event,
-                Parser.parse_gitlab_release_event,
-                Parser.parse_gitlab_tag_push_event,
-                Parser.parse_anitya_version_update_event,
-                Parser.parse_openscanhub_task_finished_event,
-                Parser.parse_openscanhub_task_started_event,
-                Parser.parse_commit_comment_event,
-                Parser.parse_pagure_pull_request_event,
                 Parser.parse_forgejo_comment_event,
-                Parser.parse_forgejo_pr_event
+                Parser.parse_forgejo_pr_event,
+                Parser.parse_forgejo_push_event,
             )
         ):
             if response:
@@ -1160,7 +1106,6 @@ class Parser:
             build_test_job_names = (
                 CoprBuildJobHelper.status_name_build,
                 CoprBuildJobHelper.status_name_test,
-                KojiBuildJobHelper.status_name_build,
             )
             if (
                 check_name_job in build_test_job_names
@@ -2037,28 +1982,10 @@ class Parser:
 
     # The .__func__ are needed for Python < 3.10
     MAPPING: ClassVar[dict[str, dict[str, Callable]]] = {
-        "github": {
-            "check_run": parse_check_rerun_event.__func__,  # type: ignore
-            "pull_request": parse_pr_event.__func__,  # type: ignore
-            "issue_comment": parse_github_comment_event.__func__,  # type: ignore
-            "release": parse_release_event.__func__,  # type: ignore
-            "push": parse_github_push_event.__func__,  # type: ignore
-            "installation": parse_installation_event.__func__,  # type: ignore
-            "commit_comment": parse_commit_comment_event.__func__,  # type: ignore
-        },
         "forgejo": {
             "push": parse_forgejo_push_event.__func__,  # type: ignore
             "issue_comment": parse_forgejo_comment_event.__func__,  # type: ignore
             "pull_request": parse_forgejo_pr_event.__func__,  # type: ignore
-        },
-        # https://docs.gitlab.com/ee/user/project/integrations/webhook_events.html
-        "gitlab": {
-            "Merge Request Hook": parse_mr_event.__func__,  # type: ignore
-            "Note Hook": parse_gitlab_comment_event.__func__,  # type: ignore
-            "Push Hook": parse_gitlab_push_event.__func__,  # type: ignore
-            "Tag Push Hook": parse_gitlab_tag_push_event.__func__,  # type: ignore
-            "Pipeline Hook": parse_pipeline_event.__func__,  # type: ignore
-            "Release Hook": parse_gitlab_release_event.__func__,  # type: ignore
         },
         "fedora-messaging": {
             "pagure.pull-request.flag.added": parse_pagure_pr_flag_event.__func__,  # type: ignore

@@ -9,8 +9,7 @@ from typing import Any, Optional, Protocol, Union
 
 from packit.config import JobConfig, PackageConfig
 from packit.exceptions import PackitException
-from packit.utils.koji_helper import KojiHelper
-from packit.vm_image_build import ImageBuilder
+
 
 from packit_service.config import ProjectToSync
 from packit_service.constants import COPR_SRPM_CHROOT, KojiBuildState
@@ -32,7 +31,6 @@ from packit_service.models import (
 from packit_service.utils import get_packit_commands_from_comment
 from packit_service.worker.handlers.abstract import CeleryTask
 from packit_service.worker.helpers.build.copr_build import CoprBuildJobHelper
-from packit_service.worker.helpers.build.koji_build import KojiBuildJobHelper
 from packit_service.worker.helpers.sidetag import Sidetag, SidetagHelper
 from packit_service.worker.helpers.testing_farm import (
     DownstreamTestingFarmJobHelper,
@@ -122,33 +120,6 @@ class GetKojiBuildFromTaskOrPullRequestMixin(GetKojiBuild, GetKojiTaskEventMixin
             else:
                 self._db_project_event = self.data.db_project_event
         return self._db_project_event
-
-
-class GetKojiBuildJobHelper(Protocol):
-    @property
-    @abstractmethod
-    def koji_build_helper(self) -> KojiBuildJobHelper: ...
-
-
-class GetKojiBuildJobHelperMixin(GetKojiBuildJobHelper, ConfigFromEventMixin):
-    _koji_build_helper: Optional[KojiBuildJobHelper] = None
-    package_config: PackageConfig
-    job_config: JobConfig
-
-    @property
-    def koji_build_helper(self) -> KojiBuildJobHelper:
-        if not self._koji_build_helper:
-            self._koji_build_helper = KojiBuildJobHelper(
-                service_config=self.service_config,
-                package_config=self.package_config,
-                project=self.project,
-                metadata=self.data,
-                db_project_event=self.data.db_project_event,
-                job_config=self.job_config,
-                build_targets_override=self.data.build_targets_override,
-                tests_targets_override=self.data.tests_targets_override,
-            )
-        return self._koji_build_helper
 
 
 @dataclass
@@ -295,87 +266,6 @@ class GetKojiBuildDataFromKojiBuildTagEventMixin(
     @property
     def num_of_branches(self):
         return 1  # just a branch in the event
-
-
-class GetKojiBuildDataFromKojiService(Config, GetKojiBuildData):
-    """See https://koji.fedoraproject.org/koji/api method listBuilds
-    for a detailed description of a Koji build map.
-    """
-
-    _build: Optional[Any] = None
-    _koji_helper: Optional[KojiHelper] = None
-
-    @property
-    def koji_helper(self) -> KojiHelper:
-        if not self._koji_helper:
-            self._koji_helper = KojiHelper()
-        return self._koji_helper
-
-    def _get_latest_build(self) -> dict:
-        if not (
-            build := self.koji_helper.get_latest_candidate_build(
-                self.project.repo,
-                self._dist_git_branch,
-            )
-        ):
-            raise PackitException(
-                f"No build found for package={self.project.repo} "
-                f"and branch={self._dist_git_branch}",
-            )
-        return build
-
-    @property
-    def build(self) -> dict:
-        if not self._build:
-            self._build = self._get_latest_build()
-        return self._build
-
-    @property
-    def _nvr(self) -> str:
-        return self.build["nvr"]
-
-    @property
-    def _build_id(self) -> int:
-        return self.build["build_id"]
-
-    @property
-    def _state(self) -> KojiBuildState:
-        return KojiBuildState.from_number(self.build["state"])
-
-    @property
-    def _task_id(self) -> int:
-        return self.build["task_id"]
-
-
-class GetKojiBuildDataFromKojiServiceMixin(
-    ConfigFromEventMixin,
-    GetKojiBuildDataFromKojiService,
-):
-    @property
-    def _dist_git_branch(self) -> str:
-        return self.project.get_pr(self.data.pr_id).target_branch
-
-    @property
-    def num_of_branches(self):
-        return 1  # just a branch in the event
-
-
-class GetKojiBuildDataFromKojiServiceMultipleBranches(
-    GetKojiBuildDataFromKojiService,
-    GetBranches,
-):
-    @property
-    def _dist_git_branch(self) -> str:
-        return self.branches[self._branch_index]
-
-    @property
-    def build(self):
-        # call it every time since dist_git_branch reference can change
-        return self._get_latest_build()
-
-    @property
-    def num_of_branches(self):
-        return len(self.branches)
 
 
 class GetCoprBuildEvent(Protocol):
@@ -683,74 +573,3 @@ class GetVMImageData(Protocol):
     @property
     @abstractmethod
     def image_customizations(self) -> dict: ...
-
-
-class GetVMImageBuilderMixin(Config):
-    _vm_image_builder: Optional[ImageBuilder] = None
-
-    @property
-    def vm_image_builder(self):
-        if not self._vm_image_builder:
-            self._vm_image_builder = ImageBuilder(
-                self.service_config.redhat_api_refresh_token,
-            )
-        return self._vm_image_builder
-
-
-class GetVMImageDataMixin(Config, GetCoprBuildJobHelper):
-    job_config: JobConfig
-    _copr_build: Optional[CoprBuildTargetModel] = None
-    _copr_build_helper: Optional[CoprBuildJobHelper] = None
-
-    @property
-    def chroot(self) -> str:
-        return self.job_config.copr_chroot
-
-    @property
-    def identifier(self) -> str:
-        return self.job_config.identifier
-
-    @property
-    def owner(self) -> str:
-        return self.job_config.owner or (self.copr_build.owner if self.copr_build else None)
-
-    @property
-    def project_name(self) -> str:
-        return self.job_config.project or (
-            self.copr_build.project_name if self.copr_build else None
-        )
-
-    @property
-    def image_name(self) -> str:
-        return f"{self.owner}/{self.project_name}/{self.data.pr_id}"
-
-    @property
-    def image_distribution(self) -> str:
-        return self.job_config.image_distribution
-
-    @property
-    def image_request(self) -> dict:
-        return self.job_config.image_request
-
-    @property
-    def image_customizations(self) -> dict:
-        return self.job_config.image_customizations
-
-    @property
-    def copr_build(self) -> Optional[CoprBuildTargetModel]:
-        if not self._copr_build:
-            copr_builds = CoprBuildTargetModel.get_all_by(
-                project_name=self.job_config.project or self.copr_build_helper.default_project_name,
-                commit_sha=self.data.commit_sha,
-                owner=self.job_config.owner or self.copr_build_helper.job_owner,
-                target=self.job_config.copr_chroot,
-                status=BuildStatus.success,
-            )
-
-            for copr_build in copr_builds:
-                project_event_object = copr_build.get_project_event_object()
-                # check whether the event trigger matches
-                if project_event_object.id == self.data.db_project_object.id:
-                    self._copr_build = copr_build
-                    break
-        return self._copr_build

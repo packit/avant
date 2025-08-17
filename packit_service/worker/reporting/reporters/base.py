@@ -55,18 +55,9 @@ class StatusReporter:
         Get the StatusReporter instance.
         """
         from .forgejo import StatusReporterForgejo
-        from .github import StatusReporterGithubChecks
-        from .gitlab import StatusReporterGitlab
-        from .pagure import StatusReporterPagure
 
         reporter = StatusReporter
-        if isinstance(project, GithubProject):
-            reporter = StatusReporterGithubChecks
-        elif isinstance(project, GitlabProject):
-            reporter = StatusReporterGitlab
-        elif isinstance(project, PagureProject):
-            reporter = StatusReporterPagure
-        elif isinstance(project, ForgejoProject):
+        if isinstance(project, ForgejoProject):
             reporter = StatusReporterForgejo
         return reporter(project, commit_sha, packit_user, project_event_id, pr_id)
 
