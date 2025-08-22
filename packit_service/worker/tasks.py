@@ -51,6 +51,7 @@ from packit_service.worker.handlers import (
     CoprBuildStartHandler,
     TestingFarmHandler,
     TestingFarmResultsHandler,
+    SubmitPackageHandler,
 )
 from packit_service.worker.handlers.abstract import TaskName
 from packit_service.worker.handlers.usage import check_onboarded_projects
@@ -189,6 +190,15 @@ def babysit_copr_build(self, build_id: int):
             f"No feedback for copr build id={build_id} yet",
         )
 
+
+@celery_app.task(name=TaskName.submit_package, base=TaskWithRetry)
+def run_submit_package_handler(event: dict, package_config: dict, job_config: dict):
+    handler = SubmitPackageHandler(
+        package_config=load_package_config(package_config),
+        job_config=load_job_config(job_config),
+        event=event,
+    )
+    return get_handlers_task_results(handler.run_job(), event)
 
 # tasks for running the handlers
 @celery_app.task(name=TaskName.copr_build_start, base=TaskWithRetry)

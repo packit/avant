@@ -15,10 +15,8 @@ from packit.config import (
     JobConfigTriggerType,
     JobType,
 )
-from packit.config.common_package_config import CommonPackageConfig
 from packit.config.package_config import PackageConfig
 
-from ogr.abstract import GitProject
 from ogr.services.forgejo import ForgejoProject
 from ogr.services.github import GithubProject
 from ogr.services.gitlab import GitlabProject
@@ -52,7 +50,6 @@ from packit_service.worker.handlers.abstract import (
     TaskName,
     configured_as,
     reacts_to,
-    run_for_check_rerun,
     run_for_comment,
 )
 from packit_service.worker.handlers.mixin import (

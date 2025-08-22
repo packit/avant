@@ -19,6 +19,13 @@ def mock_config():
     return config
 
 
+@pytest.fixture()
+def forgejo_mock_config():
+    config = flexmock(ServiceConfig)
+    config.validate_webhooks = False
+    return config
+
+
 @pytest.mark.parametrize(
     "headers, is_good",
     [
@@ -239,6 +246,27 @@ def test_interested(mock_config, headers, payload, interested):
     from packit_service.service.api import webhooks
 
     webhooks.config = mock_config
+
+    with Flask(__name__).test_request_context(
+        json=payload,
+        content_type="application/json",
+        headers=headers,
+    ):
+        assert webhooks.GithubWebhook.interested() == interested
+
+
+@pytest.parametrize(
+    "headers, payload, interested",
+    [({"X-Forgejo-Event": "issue_comment"}, {"action": "created"}, True)],
+)
+def test_intersted_forgejo(forgejo_mock_config, headers, payload, interested):
+    flexmock(ServiceConfig).should_receive("get_service_config").and_return(
+        flexmock(ServiceConfig),
+    )
+
+    from packit_service.service.api import webhooks
+
+    webhooks.config = forgejo_mock_config
 
     with Flask(__name__).test_request_context(
         json=payload,
