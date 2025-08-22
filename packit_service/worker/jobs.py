@@ -200,9 +200,13 @@ class SteveJobs:
         """
         processing_results = None
 
-        if isinstance(
-            self.event,
-            (testing_farm.Result),
+        if (
+            isinstance(
+                self.event,
+                (forgejo.pr.Comment, testing_farm.Result),
+            )
+            and self.event.db_project_object
+            and (url := self.event.db_project_object.project.project_url)
         ):
             # try to process Fedora CI jobs first
             processing_results = self.process_fedora_ci_jobs()
@@ -285,6 +289,16 @@ class SteveJobs:
                 status has been updated.
         """
         number_of_build_targets = None
+        # TODO: Add back when these handlers are available
+        # if isinstance(self.event, abstract.comment.CommentEvent) and handler_kls in (
+        #     PullFromUpstreamHandler,
+        #     DownstreamKojiBuildHandler,
+        #     BodhiUpdateHandler,
+        #     RetriggerBodhiUpdateHandler,
+        #     RetriggerDownstreamKojiBuildHandler,
+        #     TagIntoSidetagHandler,
+        # ):
+        #     self.report_task_accepted_for_downstream_retrigger_comments(handler_kls)
         if handler_kls not in (
             CoprBuildHandler,
             TestingFarmHandler,
@@ -348,6 +362,31 @@ class SteveJobs:
         Returns:
             Whether the Packit configuration is present in the repo.
         """
+        if isinstance(self.event, abstract.comment.CommentEvent) and (
+            handlers := get_handlers_for_comment(
+                self.event.comment,
+                packit_comment_command_prefix=self.service_config.comment_command_prefix,
+            )
+        ):
+            # we require packit config file when event is triggered by /packit command
+            # but not when it is triggered through an issue in the issues repository
+            dist_git_package_config = None
+            if (
+                isinstance(self.event, abstract.comment.Issue)
+                # for propose-downstream we want to load the package config
+                # from upstream repo
+                and ProposeDownstreamHandler not in handlers
+                and (dist_git_package_config := self.search_distgit_config_in_issue())
+            ):
+                (
+                    self.event.dist_git_project_url,
+                    self.event._package_config,
+                ) = dist_git_package_config
+                return True
+
+            if not dist_git_package_config:
+                self.event.fail_when_config_file_missing = True
+
         # Handle Forgejo events first, regardless of whether they're comment events
         if isinstance(self.event, forgejo.pr.Comment) or isinstance(self.event, forgejo.pr.Action):
             logging.debug(f"Processing Forgejo PR event")
@@ -472,6 +511,7 @@ class SteveJobs:
             )
             return []
 
+        allowlist = Allowlist(service_config=self.service_config)
         processing_results: list[TaskResults] = []
 
         statuses_check_feedback: list[datetime] = []
@@ -481,6 +521,23 @@ class SteveJobs:
             job_configs = self.get_config_for_handler_kls(
                 handler_kls=handler_kls,
             )
+
+            # check allowlist approval for every job to be able to track down which jobs
+            # failed because of missing allowlist approval
+            if not allowlist.check_and_report(
+                self.event,
+                self.event.project,
+                job_configs=job_configs,
+            ):
+                return [
+                    TaskResults.create_from(
+                        success=False,
+                        msg="Account is not allowlisted!",
+                        job_config=job_config,
+                        event=self.event,
+                    )
+                    for job_config in job_configs
+                ]
 
             processing_results.extend(
                 self.create_tasks(job_configs, handler_kls, statuses_check_feedback),
@@ -556,6 +613,13 @@ class SteveJobs:
         Returns:
             Whether the task should be created.
         """
+        if self.service_config.deployment not in job_config.packit_instances:
+            logger.debug(
+                f"Current deployment ({self.service_config.deployment}) "
+                f"does not match the job configuration ({job_config.packit_instances}). "
+                "The job will not be run.",
+            )
+            return False
 
         return handler_kls.pre_check(
             package_config=(
@@ -586,8 +650,57 @@ class SteveJobs:
             logger.warning(
                 "Cannot obtain project from this event! Skipping private repository check!",
             )
+        elif self.event.project.is_private():
+            service_with_namespace = (
+                f"{self.event.project.service.hostname}/{self.event.project.namespace}"
+            )
+            if service_with_namespace not in self.service_config.enabled_private_namespaces:
+                logger.info(
+                    f"We do not interact with private repositories by default. "
+                    f"Add `{service_with_namespace}` to the `enabled_private_namespaces` "
+                    f"in the service configuration.",
+                )
+                return False
+            logger.debug(
+                f"Working in `{service_with_namespace}` namespace "
+                f"which is private but enabled via configuration.",
+            )
 
         return True
+
+    def search_distgit_config_in_issue(self) -> Optional[tuple[str, PackageConfig]]:
+        """Get a tuple (dist-git repo url, package config loaded from dist-git yaml file).
+        Look up for a dist-git repo url inside
+        the issue description for the issue comment event.
+        The issue description should have a format like the following:
+        ```
+        Packit failed on creating pull-requests in dist-git
+            (https://src.fedoraproject.org/rpms/python-teamcity-messages):
+        | dist-git branch | error |
+        | --------------- | ----- |
+        | `f37`           | ``    |
+        You can retrigger the update by adding a comment
+            (`/packit propose-downstream`) into this issue.
+        ```
+
+        Returns:
+            A tuple (`dist_git_repo_url`, `dist_git_package_config`) or `None`
+        """
+        if not isinstance(self.event, abstract.comment.Issue):
+            # not a comment, doesn't matter
+            return None
+
+        issue = self.event.project.get_issue(self.event.issue_id)
+        if m := match(r"[\w\s-]+dist-git \((\S+)\):", issue.description):
+            url = m[1]
+            project = self.service_config.get_project(url=url)
+            package_config = PackageConfigGetter.get_package_config_from_repo(
+                project=project,
+                fail_when_missing=False,
+            )
+            return url, package_config
+
+        return None
 
     def check_explicit_matching(self) -> list[JobConfig]:
         """Force explicit event/jobs matching for triggers
@@ -598,6 +711,51 @@ class SteveJobs:
 
         matching_jobs: list[JobConfig] = []
         return matching_jobs
+
+    def is_fas_verification_comment(self, comment: str) -> bool:
+        """
+        Checks whether the comment contains Packit verification command:
+        `/packit(-stg) verify-fas`
+
+        Args:
+            comment: Comment to be checked.
+
+        Returns:
+            `True`, if is verification comment, `False` otherwise.
+        """
+        command = get_packit_commands_from_comment(
+            comment,
+            self.service_config.comment_command_prefix,
+        )
+
+        return bool(command and command[0] == PACKIT_VERIFY_FAS_COMMAND)
+
+    def report_task_accepted_for_downstream_retrigger_comments(
+        self,
+        handler_kls: type[JobHandler],
+    ):
+        """
+        For dist-git PR comment events/ issue comment events in issue_repository,
+        report that the task was accepted and provide handler specific info.
+        """
+        if not isinstance(
+            self.event,
+            (abstract.comment.Issue, abstract.comment.PullRequest),
+        ):
+            logger.debug(
+                "Not a comment event, not reporting task was accepted via comment.",
+            )
+            return
+
+        message = (
+            f"{TASK_ACCEPTED} "
+            f"{handler_kls.get_handler_specific_task_accepted_message(self.service_config)}"
+        )
+
+        if isinstance(self.event, abstract.comment.PullRequest):
+            self.event.pull_request_object.comment(message)
+        if isinstance(self.event, abstract.comment.Issue):
+            self.event.issue_object.comment(message)
 
     def get_jobs_matching_event(self) -> list[JobConfig]:
         """

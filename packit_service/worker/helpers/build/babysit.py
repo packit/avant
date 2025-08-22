@@ -13,7 +13,6 @@ import copr.v3
 import requests
 from celery.canvas import Signature
 from copr.v3 import Client as CoprClient
-from requests import HTTPError
 
 from packit_service.constants import (
     COPR_API_FAIL_STATE,
@@ -27,7 +26,6 @@ from packit_service.constants import (
 from packit_service.events import copr as copr_events
 from packit_service.events import (
     testing_farm,
-    vm_image,
 )
 from packit_service.events.enums import FedmsgTopic
 from packit_service.models import (
@@ -36,8 +34,6 @@ from packit_service.models import (
     SRPMBuildModel,
     TestingFarmResult,
     TFTTestRunTargetModel,
-    VMImageBuildStatus,
-    VMImageBuildTargetModel,
 )
 from packit_service.utils import elapsed_seconds
 from packit_service.worker.handlers import (
@@ -47,7 +43,6 @@ from packit_service.worker.handlers import (
 )
 from packit_service.worker.handlers.copr import AbstractCoprBuildReportHandler
 from packit_service.worker.jobs import SteveJobs
-from packit_service.worker.mixin import ConfigFromUrlMixin
 from packit_service.worker.parser import Parser
 
 logger = logging.getLogger(__name__)
