@@ -12,8 +12,7 @@ from re import match
 from typing import Callable, Optional, Union
 
 import celery
-from packit.config import JobConfig, JobConfigTriggerType, JobConfigView, JobType, PackageConfig
-from packit.config.common_package_config import CommonPackageConfig
+from packit.config import JobConfig, JobConfigTriggerType, PackageConfig
 from packit.utils import nested_get
 
 from packit_service.config import ServiceConfig
@@ -22,7 +21,7 @@ from packit_service.constants import (
     PACKIT_VERIFY_FAS_COMMAND,
     TASK_ACCEPTED,
 )
-from packit_service.events import abstract, forgejo, github, pagure, testing_farm
+from packit_service.events import abstract, forgejo, pagure, testing_farm
 from packit_service.events.event import Event
 from packit_service.events.event_data import EventData
 from packit_service.package_config_getter import PackageConfigGetter
@@ -31,7 +30,6 @@ from packit_service.utils import (
     get_packit_commands_from_comment,
     pr_labels_match_configuration,
 )
-from packit_service.worker.allowlist import Allowlist
 from packit_service.worker.handlers import (
     CoprBuildHandler,
     TestingFarmHandler,
@@ -61,7 +59,7 @@ from packit_service.worker.result import TaskResults
 logger = logging.getLogger(__name__)
 
 
-MANUAL_OR_RESULT_EVENTS = [abstract.comment.CommentEvent, abstract.base.Result, github.check.Rerun]
+MANUAL_OR_RESULT_EVENTS = [abstract.comment.CommentEvent, abstract.base.Result]
 
 
 def get_handlers_for_comment(
@@ -206,7 +204,7 @@ class SteveJobs:
                 (forgejo.pr.Comment, testing_farm.Result),
             )
             and self.event.db_project_object
-            and (url := self.event.db_project_object.project.project_url)
+            and self.event.db_project_object.project.project_url
         ):
             # try to process Fedora CI jobs first
             processing_results = self.process_fedora_ci_jobs()
@@ -362,21 +360,16 @@ class SteveJobs:
         Returns:
             Whether the Packit configuration is present in the repo.
         """
-        if isinstance(self.event, abstract.comment.CommentEvent) and (
-            handlers := get_handlers_for_comment(
+        if isinstance(self.event, abstract.comment.CommentEvent):
+            get_handlers_for_comment(
                 self.event.comment,
                 packit_comment_command_prefix=self.service_config.comment_command_prefix,
             )
-        ):
             # we require packit config file when event is triggered by /packit command
             # but not when it is triggered through an issue in the issues repository
             dist_git_package_config = None
-            if (
-                isinstance(self.event, abstract.comment.Issue)
-                # for propose-downstream we want to load the package config
-                # from upstream repo
-                and ProposeDownstreamHandler not in handlers
-                and (dist_git_package_config := self.search_distgit_config_in_issue())
+            if isinstance(self.event, abstract.comment.Issue) and (
+                dist_git_package_config := self.search_distgit_config_in_issue()
             ):
                 (
                     self.event.dist_git_project_url,
@@ -388,8 +381,8 @@ class SteveJobs:
                 self.event.fail_when_config_file_missing = True
 
         # Handle Forgejo events first, regardless of whether they're comment events
-        if isinstance(self.event, forgejo.pr.Comment) or isinstance(self.event, forgejo.pr.Action):
-            logging.debug(f"Processing Forgejo PR event")
+        if isinstance(self.event, (forgejo.pr.Comment, forgejo.pr.Action)):
+            logging.debug("Processing Forgejo PR event")
             # For PR events, we need to use the commit SHA from the source project
             # instead of base_ref which refers to the target project
             pr = self.event.project.get_pr(self.event.pr_id)
@@ -511,7 +504,6 @@ class SteveJobs:
             )
             return []
 
-        allowlist = Allowlist(service_config=self.service_config)
         processing_results: list[TaskResults] = []
 
         statuses_check_feedback: list[datetime] = []
@@ -521,23 +513,6 @@ class SteveJobs:
             job_configs = self.get_config_for_handler_kls(
                 handler_kls=handler_kls,
             )
-
-            # check allowlist approval for every job to be able to track down which jobs
-            # failed because of missing allowlist approval
-            if not allowlist.check_and_report(
-                self.event,
-                self.event.project,
-                job_configs=job_configs,
-            ):
-                return [
-                    TaskResults.create_from(
-                        success=False,
-                        msg="Account is not allowlisted!",
-                        job_config=job_config,
-                        event=self.event,
-                    )
-                    for job_config in job_configs
-                ]
 
             processing_results.extend(
                 self.create_tasks(job_configs, handler_kls, statuses_check_feedback),
@@ -619,7 +594,7 @@ class SteveJobs:
                 f"does not match the job configuration ({job_config.packit_instances}). "
                 "The job will not be run.",
             )
-            return False
+            return True
 
         return handler_kls.pre_check(
             package_config=(
@@ -768,10 +743,6 @@ class SteveJobs:
         for job in self.event.packages_config.get_job_views():
             if (
                 job.trigger == self.event.job_config_trigger_type
-                and (
-                    not isinstance(self.event, github.check.Rerun)
-                    or self.event.job_identifier == job.identifier
-                )
                 and job not in jobs_matching_trigger
                 # Manual trigger condition
                 and (
@@ -821,11 +792,6 @@ class SteveJobs:
                 (pagure.pr.Comment, abstract.comment.Commit),
             ):
                 self.event.comment_object.add_reaction(COMMENT_REACTION)
-
-        if isinstance(self.event, github.check.Rerun):
-            handlers_triggered_by_job = get_handlers_for_check_rerun(
-                self.event.check_name_job,
-            )
 
         return handlers_triggered_by_job
 

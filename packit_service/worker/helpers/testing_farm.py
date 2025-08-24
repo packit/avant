@@ -9,12 +9,11 @@ from typing import Any, Callable, Optional, Union
 
 from packit.config import JobConfig, PackageConfig
 from packit.exceptions import PackitConfigException
-from packit.utils import commands, nested_get
-from packit.utils.koji_helper import KojiHelper
+from packit.utils import nested_get
 
 from ogr.abstract import GitProject
 from ogr.utils import RequestResponse
-from packit_service.config import Deployment, ServiceConfig
+from packit_service.config import ServiceConfig
 from packit_service.constants import (
     BASE_RETRY_INTERVAL_IN_MINUTES_FOR_OUTAGES,
     CONTACTS_URL,
@@ -23,12 +22,11 @@ from packit_service.constants import (
     TESTING_FARM_INSTALLABILITY_TEST_REF,
     TESTING_FARM_INSTALLABILITY_TEST_URL,
 )
-from packit_service.events import github, gitlab, pagure
+from packit_service.events import forgejo, pagure
 from packit_service.events.event_data import EventData
 from packit_service.models import (
     BuildStatus,
     CoprBuildTargetModel,
-    KojiBuildTargetModel,
     ProjectEventModel,
     PullRequestModel,
     TestingFarmResult,
@@ -38,10 +36,9 @@ from packit_service.models import (
 )
 from packit_service.sentry_integration import send_to_sentry
 from packit_service.service.urls import get_testing_farm_info_url
-from packit_service.utils import get_package_nvrs, get_packit_commands_from_comment
+from packit_service.utils import get_package_nvrs
 from packit_service.worker.celery_task import CeleryTask
 from packit_service.worker.helpers.build import CoprBuildJobHelper
-from packit_service.worker.helpers.fedora_ci import FedoraCIHelper
 from packit_service.worker.helpers.testing_farm_client import TestingFarmClient
 from packit_service.worker.reporting import BaseCommitStatus
 from packit_service.worker.result import TaskResults
@@ -296,8 +293,7 @@ class TestingFarmJobHelper(CoprBuildJobHelper):
 
     def is_comment_event(self) -> bool:
         return self.metadata.event_type in (
-            github.pr.Comment.event_type(),
-            gitlab.mr.Comment.event_type(),
+            forgejo.pr.Comment.event_type(),
             pagure.pr.Comment.event_type(),
         )
 
@@ -328,12 +324,8 @@ class TestingFarmJobHelper(CoprBuildJobHelper):
             # for comment event requesting copr build
             self.metadata.event_type
             in (
-                github.push.Commit.event_type(),
-                github.pr.Action.event_type(),
-                github.commit.Comment.event_type(),
-                gitlab.push.Commit.event_type(),
-                gitlab.mr.Action.event_type(),
-                gitlab.commit.Comment.event_type(),
+                forgejo.push.Commit.event_type(),
+                forgejo.pr.Action.event_type(),
             )
             or self.is_copr_build_comment_event()
         )
@@ -987,8 +979,8 @@ class TestingFarmJobHelper(CoprBuildJobHelper):
 
         namespace, repo, pr_id = parsed_pr_argument
 
-        # for now let's default to github.com
-        project_url = f"https://github.com/{namespace}/{repo}"
+        # for now let's default to forgejo.com
+        project_url = f"https://codeberg.org/{namespace}/{repo}"
         pr_model = PullRequestModel.get(
             pr_id=int(pr_id),
             namespace=namespace,
@@ -1246,354 +1238,3 @@ def implements_fedora_ci_test(test_name: str, skipif: Optional[Callable] = None)
         return function
 
     return _update_mapping
-
-
-class DownstreamTestingFarmJobHelper:
-    _koji_helper: Optional[KojiHelper] = None
-
-    def __init__(
-        self,
-        service_config: ServiceConfig,
-        project: GitProject,
-        metadata: EventData,
-        koji_build: KojiBuildTargetModel,
-        celery_task: Optional[CeleryTask] = None,
-    ):
-        self.service_config = service_config
-        self.project = project
-        self.metadata = metadata
-        self.koji_build = koji_build
-        self.celery_task = celery_task
-        self._tft_client: Optional[TestingFarmClient] = None
-        self._ci_helper: Optional[FedoraCIHelper] = None
-
-    @property
-    def koji_helper(self):
-        if not self._koji_helper:
-            self._koji_helper = KojiHelper()
-        return self._koji_helper
-
-    @staticmethod
-    def get_fedora_ci_tests(
-        service_config: ServiceConfig, project: GitProject, metadata: EventData
-    ) -> list[str]:
-        """
-        Gets relevant Fedora CI tests registered using the `@implements_fedora_ci_test()` decorator.
-        In case of valid comment command, if a test name is specified as an argument to the command
-        and such a test is registered, only that test is returned, otherwise all registered tests
-        are returned. An empty list is returned in case of invalid command.
-
-        Args:
-            service_config: Service config.
-            project: Git project.
-            metadata: Event metadata.
-
-        Returns:
-            List of registered Fedora CI test names.
-        """
-        all_tests = [
-            name
-            for name, (_, skipif) in FEDORA_CI_TESTS.items()
-            if not skipif or not skipif(service_config, project, metadata)
-        ]
-        if metadata.event_type != pagure.pr.Comment.event_type():
-            return all_tests
-        # TODO: remove this once Fedora CI has its own instances and comment_command_prefixes
-        # comment_command_prefixes for Fedora CI are /packit-ci and /packit-ci-stg
-        comment_command_prefix = (
-            "/packit-ci-stg"
-            if service_config.comment_command_prefix.endswith("-stg")
-            else "/packit-ci"
-        )
-        commands = get_packit_commands_from_comment(
-            metadata.event_dict.get("comment"), comment_command_prefix
-        )
-        if not commands:
-            return []
-        if len(commands) > 1 and commands[1] in all_tests:
-            return [commands[1]]
-        return all_tests
-
-    @property
-    def api_url(self) -> str:
-        return (
-            "https://prod.packit.dev/api"
-            if self.service_config.deployment == Deployment.prod
-            else "https://stg.packit.dev/api"
-        )
-
-    @property
-    def tft_client(self) -> TestingFarmClient:
-        if not self._tft_client:
-            self._tft_client = TestingFarmClient(
-                api_url=self.service_config.testing_farm_api_url,
-                token=self.service_config.testing_farm_secret,
-            )
-        return self._tft_client
-
-    @property
-    def ci_helper(self) -> FedoraCIHelper:
-        if not self._ci_helper:
-            self._ci_helper = FedoraCIHelper(
-                project=self.project,
-                metadata=self.metadata,
-                target_branch=self.koji_build.target,
-            )
-        return self._ci_helper
-
-    @staticmethod
-    def get_check_name(test_name: str) -> str:
-        return f"Packit - {test_name} test(s)"
-
-    def report(
-        self,
-        test_run: TFTTestRunTargetModel,
-        state: BaseCommitStatus,
-        description: str,
-        url: Optional[str] = None,
-    ):
-        self.ci_helper.report(
-            state=state,
-            description=description,
-            url=url if url else "",
-            check_name=self.get_check_name(test_run.data["fedora_ci_test"]),
-        )
-
-    def run_testing_farm(
-        self,
-        test_run: TFTTestRunTargetModel,
-    ) -> TaskResults:
-        logger.debug(
-            f"Running testing farm for test {test_run.data['fedora_ci_test']}.",
-        )
-
-        self.report(
-            test_run=test_run,
-            state=BaseCommitStatus.running,
-            description="Submitting the tests ...",
-        )
-
-        return self.prepare_and_send_tf_request(test_run)
-
-    def prepare_and_send_tf_request(
-        self,
-        test_run: TFTTestRunTargetModel,
-    ) -> TaskResults:
-        """
-        Prepare the payload that will be sent to Testing Farm, submit it to
-        TF API and handle the response (report whether the request was sent
-        successfully, store the new TF run in DB or retry if needed).
-        """
-        logger.info("Preparing testing farm request...")
-
-        compose = self.tft_client.distro2compose(test_run.target)
-
-        if not compose:
-            msg = "We were not able to map distro to TF compose."
-            return TaskResults(success=False, details={"msg": msg})
-
-        payload = FEDORA_CI_TESTS[test_run.data["fedora_ci_test"]][0](
-            self, distro=test_run.target, compose=compose
-        )
-
-        endpoint = "requests"
-
-        response = self._tft_client.send_testing_farm_request(
-            endpoint=endpoint,
-            method="POST",
-            data=payload,
-        )
-
-        if response.status_code != 200:
-            return self._handle_tf_submit_failure(
-                test_run=test_run,
-                response=response,
-                payload=payload,
-            )
-
-        return self._handle_tf_submit_successful(
-            test_run=test_run,
-            response=response,
-        )
-
-    @implements_fedora_ci_test("installability")
-    def _payload_installability(self, distro: str, compose: str) -> dict:
-        git_repo = "https://github.com/fedora-ci/installability-pipeline.git"
-        git_ref = (
-            commands.run_command(["git", "ls-remote", git_repo, "HEAD"], output=True)
-            .stdout.strip()
-            .split()[0]
-        )
-
-        if distro == "fedora-rawhide":
-            # profile names are in "fedora-N" format
-            # extract current rawhide version number from its candidate tag
-            candidate_tag = self.koji_helper.get_candidate_tag("rawhide")
-            profile = re.sub(r"f(\d+)(-.*)?", r"fedora-\1", candidate_tag)
-        else:
-            profile = distro
-
-        return {
-            "test": {
-                "tmt": {
-                    "url": git_repo,
-                    "ref": git_ref,
-                },
-            },
-            "environments": [
-                {
-                    "arch": "x86_64",
-                    "os": {"compose": compose},
-                    "variables": {
-                        "PROFILE_NAME": profile,
-                        "TASK_ID": self.koji_build.task_id,
-                    },
-                },
-            ],
-            "notification": {
-                "webhook": {
-                    "url": f"{self.api_url}/testing-farm/results",
-                    "token": self.service_config.testing_farm_secret,
-                },
-            },
-        }
-
-    @staticmethod
-    def is_fmf_configured(project: GitProject, metadata: EventData) -> bool:
-        try:
-            project.get_file_content(
-                path=".fmf/version",
-                ref=metadata.commit_sha,
-            )
-        except FileNotFoundError:
-            return False
-        return True
-
-    @implements_fedora_ci_test(
-        "custom",
-        skipif=lambda _, project, metadata: not DownstreamTestingFarmJobHelper.is_fmf_configured(
-            project, metadata
-        ),
-    )
-    def _payload_custom(self, distro: str, compose: str) -> dict:
-        return {
-            "test": {
-                "tmt": {
-                    "url": self.project.get_pr(self.metadata.pr_id)
-                    .source_project.get_git_urls()
-                    .get("git"),
-                    "ref": self.metadata.commit_sha,
-                },
-            },
-            "environments": [
-                {
-                    "arch": "x86_64",
-                    "os": {"compose": compose},
-                    "variables": {
-                        "KOJI_TASK_ID": self.koji_build.task_id,
-                    },
-                    "artifacts": [
-                        {"id": self.koji_build.task_id, "type": "fedora-koji-build"},
-                    ],
-                    "tmt": {
-                        "context": {
-                            "distro": distro,
-                            "arch": "x86_64",
-                            "trigger": "commit",
-                            "initiator": "fedora-ci",
-                        }
-                    },
-                },
-            ],
-            "notification": {
-                "webhook": {
-                    "url": f"{self.api_url}/testing-farm/results",
-                    "token": self.service_config.testing_farm_secret,
-                },
-            },
-        }
-
-    def _handle_tf_submit_successful(
-        self,
-        test_run: TFTTestRunTargetModel,
-        response: RequestResponse,
-    ):
-        """
-        Create the model for the TF run in the database and report
-        the state to user.
-        """
-        pipeline_id = response.json()["id"]
-        logger.info(f"Request {pipeline_id} submitted to testing farm.")
-        test_run.set_pipeline_id(pipeline_id)
-
-        self.report(
-            test_run=test_run,
-            state=BaseCommitStatus.running,
-            description="Tests have been submitted ...",
-            url=get_testing_farm_info_url(test_run.id),
-        )
-
-        return TaskResults(success=True, details={})
-
-    def _handle_tf_submit_failure(
-        self,
-        test_run: TFTTestRunTargetModel,
-        response: RequestResponse,
-        payload: dict,
-    ) -> TaskResults:
-        """
-        Retry the task and report it to user or report the failure state to user.
-        """
-        # something went wrong
-        if response.json() and "errors" in response.json():
-            errors = response.json()["errors"]
-            # specific case, unsupported arch
-            if not (msg := nested_get(errors, "environments", "0", "arch")):
-                msg = "There was an error in the API request"
-        else:
-            msg = response.reason
-            if not self.celery_task.is_last_try():
-                return self._retry_on_submit_failure(test_run, response.reason)
-
-        test_run.set_status(TestingFarmResult.error)
-        logger.error(f"{msg}, {self.tft_client.payload_without_token(payload)}")
-        self.report(
-            test_run=test_run,
-            state=BaseCommitStatus.failure,
-            description=f"Failed to submit tests: {msg}.",
-        )
-        return TaskResults(success=False, details={"msg": msg})
-
-    def _retry_on_submit_failure(
-        self,
-        test_run: TFTTestRunTargetModel,
-        message: str,
-    ) -> TaskResults:
-        """
-        Retry when there was a failure when submitting TF tests.
-
-        Args:
-            message: message to report to the user
-        """
-        test_run.set_status(TestingFarmResult.retry)
-        interval = BASE_RETRY_INTERVAL_IN_MINUTES_FOR_OUTAGES * 2**self.celery_task.retries
-
-        self.report(
-            test_run=test_run,
-            state=BaseCommitStatus.pending,
-            description="Failed to submit tests. The task will be"
-            f" retried in {interval} {'minute' if interval == 1 else 'minutes'}.",
-        )
-        kargs = self.celery_task.task.request.kwargs.copy()
-        kargs["testing_farm_target_id"] = test_run.id
-        self.celery_task.retry(delay=interval * 60, kargs=kargs)
-        return TaskResults(
-            success=True,
-            details={
-                "msg": f"Task will be retried because of failure when submitting tests: {message}",
-            },
-        )
-
-    def get_running_jobs(self) -> Iterable[str]:
-        # [TODO] Do not cancel TF runs on the downstream yet, to be decided later on
-        pass

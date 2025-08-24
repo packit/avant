@@ -4,8 +4,8 @@ from datetime import datetime
 
 import pytest
 from flexmock import flexmock
-from ogr import GithubService, GitlabService, PagureService
 
+from ogr import GithubService, GitlabService, PagureService
 from packit_service.config import ServiceConfig
 from packit_service.models import TFTTestRunTargetModel
 

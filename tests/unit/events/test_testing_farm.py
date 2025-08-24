@@ -6,8 +6,8 @@ from datetime import datetime
 
 import pytest
 from flexmock import flexmock
-from ogr.services.github import GithubProject
 
+from ogr.services.github import GithubProject
 from packit_service.events.testing_farm import Result
 from packit_service.models import (
     CoprBuildTargetModel,

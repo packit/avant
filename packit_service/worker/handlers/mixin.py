@@ -23,10 +23,7 @@ from packit_service.models import (
 from packit_service.utils import get_packit_commands_from_comment
 from packit_service.worker.handlers.abstract import CeleryTask
 from packit_service.worker.helpers.build.copr_build import CoprBuildJobHelper
-from packit_service.worker.helpers.testing_farm import (
-    DownstreamTestingFarmJobHelper,
-    TestingFarmJobHelper,
-)
+from packit_service.worker.helpers.testing_farm import TestingFarmJobHelper
 from packit_service.worker.mixin import Config, ConfigFromEventMixin
 from packit_service.worker.monitoring import Pushgateway
 
@@ -210,33 +207,6 @@ class GetTestingFarmJobHelperMixin(
                 celery_task=self.celery_task,
             )
         return self._testing_farm_job_helper
-
-
-class GetDownstreamTestingFarmJobHelper(Protocol):
-    celery_task: Optional[CeleryTask] = None
-
-    @property
-    @abstractmethod
-    def downstream_testing_farm_job_helper(self) -> DownstreamTestingFarmJobHelper: ...
-
-
-class GetDownstreamTestingFarmJobHelperMixin(
-    GetDownstreamTestingFarmJobHelper,
-    ConfigFromEventMixin,
-):
-    _downstream_testing_farm_job_helper: Optional[DownstreamTestingFarmJobHelper] = None
-
-    @property
-    def downstream_testing_farm_job_helper(self) -> DownstreamTestingFarmJobHelper:
-        if not self._downstream_testing_farm_job_helper:
-            self._downstream_testing_farm_job_helper = DownstreamTestingFarmJobHelper(
-                service_config=self.service_config,
-                project=self.project,
-                metadata=self.data,
-                koji_build=self.koji_build,
-                celery_task=self.celery_task,
-            )
-        return self._downstream_testing_farm_job_helper
 
 
 class GetGithubCommentEvent(Protocol):

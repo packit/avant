@@ -6,7 +6,6 @@ import logging
 from packit_service.constants import (
     INTERNAL_TF_BUILDS_AND_TESTS_NOT_ALLOWED,
 )
-from packit_service.events import gitlab
 from packit_service.worker.checker.abstract import (
     ActorChecker,
     Checker,
@@ -39,13 +38,6 @@ class IsGitForgeProjectAndEventOk(
     def pre_check(
         self,
     ) -> bool:
-        if (
-            self.data.event_type == gitlab.mr.Action.event_type()
-            and self.data.event_dict["action"] == gitlab.enums.Action.closed.value
-        ):
-            # Not interested in closed merge requests
-            return False
-
         if not (self.copr_build_helper.job_build or self.copr_build_helper.job_tests_all):
             logger.info("No copr_build or tests job defined.")
             # we can't report it to end-user at this stage

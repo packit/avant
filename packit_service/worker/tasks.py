@@ -49,9 +49,9 @@ from packit_service.worker.handlers import (
     CoprBuildEndHandler,
     CoprBuildHandler,
     CoprBuildStartHandler,
+    SubmitPackageHandler,
     TestingFarmHandler,
     TestingFarmResultsHandler,
-    SubmitPackageHandler,
 )
 from packit_service.worker.handlers.abstract import TaskName
 from packit_service.worker.handlers.usage import check_onboarded_projects
@@ -199,6 +199,7 @@ def run_submit_package_handler(event: dict, package_config: dict, job_config: di
         event=event,
     )
     return get_handlers_task_results(handler.run_job(), event)
+
 
 # tasks for running the handlers
 @celery_app.task(name=TaskName.copr_build_start, base=TaskWithRetry)
@@ -375,4 +376,3 @@ def get_usage_statistics() -> None:
         logger.debug(f"Getting usage data from datetime_from {day}.")
         get_usage_data(datetime_from=day)
         logger.debug("Got usage data.")
-

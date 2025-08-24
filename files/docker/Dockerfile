@@ -29,8 +29,6 @@ RUN git rev-parse HEAD >/.packit-service.git.commit.hash \
 
 # no need to rm /src, it will stay in the image anyway
 
-COPY alembic.ini ./
-COPY alembic/ ./alembic/
 
 EXPOSE 8443
 

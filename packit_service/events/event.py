@@ -11,9 +11,9 @@ from datetime import datetime, timezone
 from logging import getLogger
 from typing import Optional, Union
 
-from ogr.abstract import GitProject
 from packit.config import JobConfigTriggerType, PackageConfig
 
+from ogr.abstract import GitProject
 from packit_service.models import (
     AbstractProjectObjectDbType,
     AnityaProjectModel,

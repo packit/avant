@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 
 from ogr.abstract import PRStatus
-
 from packit_service.config import ServiceConfig
 from packit_service.models import GitProjectModel
 

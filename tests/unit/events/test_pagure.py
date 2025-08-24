@@ -5,8 +5,8 @@ import json
 
 import pytest
 from flexmock import flexmock
-from ogr.services.pagure import PagureProject
 
+from ogr.services.pagure import PagureProject
 from packit_service.events.enums import PullRequestAction, PullRequestCommentAction
 from packit_service.events.pagure import (
     pr,
