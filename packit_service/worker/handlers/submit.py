@@ -1,12 +1,12 @@
+# Copyright Contributors to the Packit project.
+# SPDX-License-Identifier: MIT
+
 from packit_service.events import forgejo
 from packit_service.worker.checker.submit import IsUserMaintainer
 from packit_service.worker.handlers.abstract import (
     FedoraCIJobHandler,
-    JobHandler,
     TaskName,
-    reacts_to,
     reacts_to_as_fedora_ci,
-    run_for_comment,
     run_for_comment_as_fedora_ci,
 )
 from packit_service.worker.mixin import ConfigFromEventMixin, PackitAPIWithDownstreamMixin

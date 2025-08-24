@@ -7,8 +7,6 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import requests
-from packit.constants import HTTP_REQUEST_TIMEOUT
-
 from celery import Task, signature
 from packit.config import (
     JobConfig,
@@ -16,6 +14,7 @@ from packit.config import (
     JobType,
 )
 from packit.config.package_config import PackageConfig
+from packit.constants import HTTP_REQUEST_TIMEOUT
 
 from ogr.services.forgejo import ForgejoProject
 from ogr.services.github import GithubProject
@@ -424,9 +423,10 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
         """
         logger.debug(f"handle_fedora_review called for build {self.copr_event.build_id}")
         logger.debug(f"job_build: {self.copr_build_helper.job_build}")
-        logger.debug(
-            f"trigger: {self.copr_build_helper.job_build.trigger if self.copr_build_helper.job_build else None}"
+        trigger = (
+            self.copr_build_helper.job_build.trigger if self.copr_build_helper.job_build else None
         )
+        logger.debug(f"trigger: {trigger}")
         logger.debug(f"pr_id: {self.copr_event.pr_id}")
         logger.debug(f"project type: {type(self.project)}")
 
@@ -454,8 +454,8 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                 response.raise_for_status()
 
                 # Check content type to ensure it's text
-                content_type = response.headers.get('content-type', '').lower()
-                if 'text' not in content_type and 'application/octet-stream' not in content_type:
+                content_type = response.headers.get("content-type", "").lower()
+                if "text" not in content_type and "application/octet-stream" not in content_type:
                     logger.warning(f"Unexpected content type '{content_type}' for review file")
 
                 # Get content and ensure it's valid text
@@ -463,7 +463,7 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                     review_content = response.text.strip()
                 except UnicodeDecodeError as e:
                     logger.warning(f"Failed to decode review content as text: {e}")
-                    raise requests.RequestException(f"Invalid text content: {e}")
+                    raise requests.RequestException(f"Invalid text content: {e}") from e
 
                 # Handle empty or invalid content
                 if not review_content:
@@ -474,9 +474,15 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                 max_content_length = 50000
                 content_truncated = False
                 if len(review_content) > max_content_length:
-                    review_content = review_content[:max_content_length] + "\n\n[Content truncated due to size limits]"
+                    review_content = (
+                        review_content[:max_content_length]
+                        + "\n\n[Content truncated due to size limits]"
+                    )
                     content_truncated = True
-                    logger.debug(f"Review content truncated from {len(response.text)} to {len(review_content)} characters")
+                    logger.debug(
+                        f"Review content truncated from {len(response.text)} to "
+                        f"{len(review_content)} characters"
+                    )
 
                 # Create COPR repository installation instructions
                 copr_instructions = (
@@ -496,12 +502,16 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                 # Add truncation notice if content was truncated
                 truncation_notice = ""
                 if content_truncated:
-                    truncation_notice = "\n\n**Note:** Review content has been truncated due to size limits. View the complete report using the link below.\n"
+                    truncation_notice = (
+                        "\n\n**Note:** Review content has been truncated due to size limits. "
+                        "View the complete report using the link below.\n"
+                    )
 
                 # Format the main message
                 msg = (
                     f"## Fedora Package Review Report\n\n"
-                    f"Automated fedora-review has completed for the **{self.copr_event.chroot}** build of **{self.copr_event.pkg}**.\n\n"
+                    f"Automated fedora-review has completed for the "
+                    f"**{self.copr_event.chroot}** build of **{self.copr_event.pkg}**.\n\n"
                     f"{copr_instructions}"
                     f"<details>\n"
                     f"<summary><strong>View Complete Review Report</strong></summary>\n\n"
@@ -522,16 +532,19 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                 )
                 logger.debug(f"Comment method returned: {result}")
                 logger.debug(
-                    f"Successfully posted fedora-review comment for build {self.copr_event.build_id}"
+                    f"Successfully posted fedora-review comment for build "
+                    f"{self.copr_event.build_id}"
                 )
             except requests.RequestException as e:
                 logger.warning(f"Failed to fetch fedora-review content from {review_url}: {e}")
                 # Fall back to posting just the link
                 fallback_msg = (
                     f"## Fedora Package Review Report\n\n"
-                    f"Automated fedora-review has completed for the **{self.copr_event.chroot}** build of **{self.copr_event.pkg}**.\n\n"
+                    f"Automated fedora-review has completed for the "
+                    f"**{self.copr_event.chroot}** build of **{self.copr_event.pkg}**.\n\n"
                     f"**Review Report:** [review.txt]({review_url})\n\n"
-                    f"The review content could not be fetched automatically. Please check the link above for the complete report."
+                    f"The review content could not be fetched automatically. "
+                    f"Please check the link above for the complete report."
                 )
                 try:
                     self.copr_build_helper.status_reporter.comment(

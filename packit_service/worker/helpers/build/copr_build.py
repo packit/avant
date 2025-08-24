@@ -18,7 +18,6 @@ from packit.exceptions import (
     PackitCoprProjectException,
     PackitCoprSettingsException,
 )
-from packit_service.utils import create_source_script
 
 from ogr.abstract import GitProject
 from ogr.exceptions import GitForgeInternalError, OgrNetworkError
@@ -57,7 +56,7 @@ from packit_service.service.urls import (
     get_copr_build_info_url,
     get_srpm_build_info_url,
 )
-from packit_service.utils import elapsed_seconds
+from packit_service.utils import create_source_script, elapsed_seconds
 from packit_service.worker.celery_task import CeleryTask
 from packit_service.worker.helpers.build.build_helper import BaseBuildJobHelper
 from packit_service.worker.monitoring import Pushgateway

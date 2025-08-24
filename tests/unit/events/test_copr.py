@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 
 import pytest
 from flexmock import flexmock
-from ogr.services.github import GithubProject
 
+from ogr.services.github import GithubProject
 from packit_service.events.copr import End, Start
 from packit_service.events.enums import FedmsgTopic
 from packit_service.models import CoprBuildTargetModel, get_most_recent_targets

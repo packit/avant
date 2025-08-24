@@ -1,8 +1,10 @@
+# Copyright Contributors to the Packit project.
+# SPDX-License-Identifier: MIT
+
 from typing import Optional
 
 from ogr.abstract import Comment as OgrComment
 from ogr.abstract import GitProject
-
 from packit_service.service.db_project_events import AddPullRequestEventToDb
 
 from ..abstract.comment import PullRequest as AbstractPRCommentEvent
@@ -111,7 +113,7 @@ class Comment(AbstractPRCommentEvent, ForgejoEvent):
             *super().get_non_serializable_attributes(),
             "_comment_object",  # OGR Comment object with HTTP clients
             "_pull_request",  # Database model
-            "_event",  # Database model  
+            "_event",  # Database model
         ]
 
     def get_base_project(self) -> GitProject:

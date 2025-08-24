@@ -7,11 +7,11 @@ import pytest
 from celery.canvas import group as celery_group
 from flexmock import flexmock
 from github.MainClass import Github
-from ogr.services.github import GithubProject
 from packit.config import JobConfigTriggerType
 from packit.copr_helper import CoprHelper
 from packit.local_project import LocalProject, LocalProjectBuilder
 
+from ogr.services.github import GithubProject
 from packit_service.constants import (
     TASK_ACCEPTED,
 )

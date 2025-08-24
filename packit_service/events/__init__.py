@@ -3,10 +3,10 @@
 
 from . import (
     abstract,
-    forgejo,
     copr,
     enums,
     event,
+    forgejo,
     pagure,
     testing_farm,
     vm_image,

@@ -11,9 +11,10 @@ import json
 from typing import Union
 
 import click
-import ogr
 import requests
 from github.PullRequest import PullRequest
+
+import ogr
 
 
 class PRWebhookPayload:

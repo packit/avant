@@ -1,13 +1,14 @@
+# Copyright Contributors to the Packit project.
+# SPDX-License-Identifier: MIT
+
 import logging
 
 from ogr.services.forgejo.project import ForgejoProject
-from packit_service.events.forgejo.abstract import ForgejoEvent
+from packit_service.events import forgejo
 from packit_service.worker.checker.abstract import Checker
-from packit_service.events import (
-    forgejo
-)
 
 logger = logging.getLogger(__name__)
+
 
 class IsUserMaintainer(Checker):
     def pre_check(self) -> bool:

@@ -11,21 +11,14 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from celery import Task
-from ogr.abstract import GitProject
-from packit.config import JobConfig, JobType, aliases
+from packit.config import JobConfig, JobType
 from packit.config.package_config import PackageConfig
 
-from packit_service.config import ServiceConfig
-from packit_service.constants import DEFAULT_MAPPING_TF
 from packit_service.events import (
     abstract,
-    github,
-    gitlab,
-    koji,
-    pagure,
+    forgejo,
     testing_farm,
 )
-from packit_service.events.event_data import EventData
 from packit_service.models import (
     BuildStatus,
     CoprBuildTargetModel,
@@ -52,23 +45,18 @@ from packit_service.worker.checker.testing_farm import (
 )
 from packit_service.worker.handlers import JobHandler
 from packit_service.worker.handlers.abstract import (
-    FedoraCIJobHandler,
     RetriableJobHandler,
     TaskName,
     configured_as,
     reacts_to,
-    reacts_to_as_fedora_ci,
     run_for_check_rerun,
     run_for_comment,
 )
 from packit_service.worker.handlers.mixin import (
     GetCoprBuildMixin,
-    GetDownstreamTestingFarmJobHelperMixin,
-    GetGithubCommentEventMixin,
     GetTestingFarmJobHelperMixin,
 )
 from packit_service.worker.helpers.testing_farm import (
-    DownstreamTestingFarmJobHelper,
     TestingFarmJobHelper,
 )
 from packit_service.worker.mixin import PackitAPIWithDownstreamMixin
@@ -83,16 +71,8 @@ logger = logging.getLogger(__name__)
 @run_for_comment(command="copr-build")
 @run_for_comment(command="retest-failed")
 @run_for_check_rerun(prefix="testing-farm")
-@reacts_to(github.release.Release)
-@reacts_to(gitlab.release.Release)
-@reacts_to(github.pr.Action)
-@reacts_to(github.push.Commit)
-@reacts_to(gitlab.push.Commit)
-@reacts_to(gitlab.mr.Action)
-@reacts_to(github.pr.Comment)
-@reacts_to(gitlab.mr.Comment)
-@reacts_to(github.check.PullRequest)
-@reacts_to(github.check.Commit)
+@reacts_to(forgejo.pr.Action)
+@reacts_to(forgejo.pr.Comment)
 @reacts_to(abstract.comment.Commit)
 @configured_as(job_type=JobType.tests)
 class TestingFarmHandler(
@@ -100,7 +80,6 @@ class TestingFarmHandler(
     PackitAPIWithDownstreamMixin,
     GetTestingFarmJobHelperMixin,
     GetCoprBuildMixin,
-    GetGithubCommentEventMixin,
 ):
     """
     The automatic matching is now used only for /packit test
@@ -453,105 +432,6 @@ class TestingFarmResultsHandler(
                 packit_dashboard_url=url,
                 logs_url=self.log_url,
             )
-
-        test_run_model.set_status(self.result, created=self.created)
-
-        return TaskResults(success=True, details={})
-
-
-@reacts_to_as_fedora_ci(event=testing_farm.Result)
-class DownstreamTestingFarmResultsHandler(
-    FedoraCIJobHandler,
-    PackitAPIWithDownstreamMixin,
-    GetDownstreamTestingFarmJobHelperMixin,
-):
-    __test__ = False
-    task_name = TaskName.downstream_testing_farm_results
-
-    def __init__(
-        self,
-        package_config: PackageConfig,
-        job_config: JobConfig,
-        event: dict,
-    ):
-        super().__init__(
-            package_config=package_config,
-            job_config=job_config,
-            event=event,
-        )
-        self.result = (
-            TestingFarmResult.from_string(event.get("result")) if event.get("result") else None
-        )
-        self.pipeline_id = event.get("pipeline_id")
-        self.log_url = event.get("log_url")
-        self.summary = event.get("summary")
-        self.created = event.get("created")
-
-    @property
-    def db_project_event(self) -> Optional[ProjectEventModel]:
-        if not self._db_project_event:
-            run_model = TFTTestRunTargetModel.get_by_pipeline_id(
-                pipeline_id=self.pipeline_id,
-            )
-            if run_model:
-                self._db_project_event = run_model.get_project_event_model()
-        return self._db_project_event
-
-    def run(self) -> TaskResults:
-        logger.debug(f"Testing farm {self.pipeline_id} result:\n{self.result}")
-
-        test_run_model = TFTTestRunTargetModel.get_by_pipeline_id(
-            pipeline_id=self.pipeline_id,
-        )
-        if not test_run_model:
-            msg = f"Unknown pipeline_id received from the testing-farm: {self.pipeline_id}"
-            logger.warning(msg)
-            return TaskResults(success=False, details={"msg": msg})
-
-        if test_run_model.status == self.result:
-            logger.debug(
-                "Testing farm results already processed "
-                "(state in the DB is the same as the one about to report).",
-            )
-            return TaskResults(
-                success=True,
-                details={"msg": "Testing farm results already processed"},
-            )
-
-        if self.result == TestingFarmResult.running:
-            status = BaseCommitStatus.running
-            summary = self.summary or "Tests are running ..."
-        elif self.result == TestingFarmResult.passed:
-            status = BaseCommitStatus.success
-            summary = self.summary or "Tests passed ..."
-        elif self.result == TestingFarmResult.failed:
-            status = BaseCommitStatus.failure
-            summary = self.summary or "Tests failed ..."
-        elif self.result == TestingFarmResult.canceled:
-            status = BaseCommitStatus.neutral
-            summary = self.summary or "Tests canceled ..."
-        else:
-            status = BaseCommitStatus.error
-            summary = self.summary or "Error ..."
-
-        if self.result == TestingFarmResult.running:
-            self.pushgateway.test_runs_started.inc()
-        else:
-            self.pushgateway.test_runs_finished.inc()
-            test_run_time = elapsed_seconds(
-                begin=test_run_model.submitted_time,
-                end=datetime.now(timezone.utc),
-            )
-            self.pushgateway.test_run_finished_time.observe(test_run_time)
-
-        test_run_model.set_web_url(self.log_url)
-        url = get_testing_farm_info_url(test_run_model.id) if test_run_model else None
-        self.downstream_testing_farm_job_helper.report(
-            test_run=test_run_model,
-            state=status,
-            description=summary,
-            url=url if url else self.log_url,
-        )
 
         test_run_model.set_status(self.result, created=self.created)
 

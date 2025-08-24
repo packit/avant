@@ -10,3 +10,4 @@ secrets
 .mypy_cache/
 /build/
 __pycache__/
+files/python3-ogr.rpm

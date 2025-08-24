@@ -18,13 +18,7 @@ from packit.exceptions import (
 from specfile.specfile import Specfile
 
 from ogr.abstract import GitProject
-from packit_service.constants import (
-    CONTACTS_URL,
-    DOCS_HOW_TO_CONFIGURE_URL,
-    DOCS_VALIDATE_CONFIG,
-    DOCS_VALIDATE_HOOKS,
-)
-from packit_service.worker.reporting import comment_without_duplicating, create_issue_if_needed
+from packit_service.worker.reporting import comment_without_duplicating
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +51,8 @@ class PackageConfigGetter:
             for spec_file in spec_files:
                 spec_path = spec_file
                 logger.debug(
-                    f"Found spec file: {spec_path} in {source_project.full_repo_name} on commit {reference}"
+                    f"Found spec file: {spec_path} in "
+                    f"{source_project.full_repo_name} on commit {reference}"
                 )
                 spec_content = source_project.get_file_content(
                     path=spec_path,
@@ -66,10 +61,13 @@ class PackageConfigGetter:
                 specfile = Specfile(content=spec_content, sourcedir="/tmp/sources")
                 if not specfile:
                     raise PackitConfigException(
-                        f"Failed to parse spec file {spec_path} in {source_project.full_repo_name} on commit {reference}",
+                        f"Failed to parse spec file {spec_path} in "
+                        f"{source_project.full_repo_name} on commit {reference}",
                     )
 
-                packages[specfile.name] = CommonPackageConfig(specfile_path=spec_path, _targets=["fedora-rawhide-x86_64"])
+                packages[specfile.name] = CommonPackageConfig(
+                    specfile_path=spec_path, _targets=["fedora-rawhide-x86_64"]
+                )
 
             package_config = PackageConfig(
                 packages=packages,

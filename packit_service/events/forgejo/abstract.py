@@ -3,7 +3,6 @@
 
 from typing import Optional
 
-from ogr.abstract import GitProject
 from ..abstract.base import ForgeIndependent
 
 
