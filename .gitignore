@@ -11,3 +11,4 @@ secrets
 /build/
 __pycache__/
 files-avant/python3-ogr.rpm
+node_modules/
