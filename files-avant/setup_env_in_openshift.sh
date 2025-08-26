@@ -1,7 +1,6 @@
 #!/usr/bin/bash
 
-# uncomment for debugging
-# set -x
+set -x
 
 export PACKIT_HOME=/home/packit
 # Generate passwd file based on current uid, needed for fedpkg

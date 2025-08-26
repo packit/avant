@@ -1,0 +1,24 @@
+# Copyright Contributors to the Packit project.
+# SPDX-License-Identifier: MIT
+
+# Celery worker which runs tasks (packit) from the web service
+
+# For now we always build FROM packit-worker:latest which is not what we want long term
+# We want either:
+# - build hardly from packit-worker:latest or packit-worker:stable based on our branch
+# - first build packit-worker:latest, but install deps from their main/stable branches based on our branch
+#   and then build hardly FROM it
+# - build hardly FROM packit/base and install all deps from their main/stable branches based on our branch
+FROM quay.io/packit/packit-worker:dev
+
+# the base image sets WORKDIR to /src
+
+COPY files/ files/
+
+COPY .git/ .git/
+
+RUN git rev-parse HEAD >/.hardly.git.commit.hash \
+    && git show --quiet --format=%B HEAD >/.hardly.git.commit.message \
+    && ansible-playbook -vv -c local -i localhost, files/recipe-avant.yaml
+
+COPY avant/ ./avant/

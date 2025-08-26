@@ -1,0 +1,166 @@
+# Copyright Contributors to the Packit project.
+# SPDX-License-Identifier: MIT
+
+---
+- name: Run requre tests inside an openshift pod
+  hosts: localhost
+  vars:
+    local_data_dir: "../tests_openshift/openshift_integration"
+    remote_data_dir: "/tmp/test_data"
+    test_job_path: "./test-in-openshift.yaml"
+    get_data_path: "./test-in-openshift-get-data.yaml"
+    tests_job_name: "packit-tests"
+  tasks:
+    - name: get kubeconfig token
+      ansible.builtin.command: oc whoami -t
+      register: kubeconfig_token
+    - name: get project
+      ansible.builtin.command: oc project --short=true
+      register: oc_project
+    - name: get server
+      ansible.builtin.command: oc whoami --show-server
+      register: oc_server
+
+    - name: Create PVC for volume to be mounted to /src
+      k8s:
+        host: "{{ oc_server.stdout }}"
+        api_key: "{{ kubeconfig_token.stdout }}"
+        validate_certs: false
+        namespace: "{{ oc_project.stdout }}"
+        resource_definition: "{{ lookup('file', './test-src-pvc.yaml') }}"
+    - name: Start pod which mounts test-src-pvc to /src
+      k8s:
+        host: "{{ oc_server.stdout }}"
+        api_key: "{{ kubeconfig_token.stdout }}"
+        validate_certs: false
+        namespace: "{{ oc_project.stdout }}"
+        resource_definition: "{{ lookup('file', './test-src-mounter.yaml') }}"
+    - name: Wait for the pod to be running so we can rsync the files-avant
+      k8s:
+        host: "{{ oc_server.stdout }}"
+        api_key: "{{ kubeconfig_token.stdout }}"
+        validate_certs: false
+        namespace: "{{ oc_project.stdout }}"
+        name: mount-src
+        api_version: v1
+        kind: Pod
+        wait: true
+        wait_condition:
+          type: Ready
+        wait_timeout: 100
+    - name: rsync ../ to pod:/src
+      ansible.builtin.command: oc rsync ../ mount-src:/src --no-perms
+    - name: Delete the pod with mounted /src
+      k8s:
+        host: "{{ oc_server.stdout }}"
+        api_key: "{{ kubeconfig_token.stdout }}"
+        validate_certs: false
+        namespace: "{{ oc_project.stdout }}"
+        name: mount-src
+        api_version: v1
+        kind: Pod
+        state: absent
+
+    - name: Delete old test job if it exists
+      k8s:
+        host: "{{ oc_server.stdout }}"
+        api_key: "{{ kubeconfig_token.stdout }}"
+        validate_certs: false
+        namespace: "{{ oc_project.stdout }}"
+        name: "{{ tests_job_name }}"
+        api_version: v1
+        kind: Job
+        state: absent
+    - name: Delete old pod for syncing requre data
+      k8s:
+        host: "{{ oc_server.stdout }}"
+        api_key: "{{ kubeconfig_token.stdout }}"
+        validate_certs: false
+        namespace: "{{ oc_project.stdout }}"
+        name: get-requre-data
+        api_version: v1
+        kind: Pod
+        state: absent
+    - name: Delete old PersistentVolumeClaim
+      k8s:
+        host: "{{ oc_server.stdout }}"
+        api_key: "{{ kubeconfig_token.stdout }}"
+        validate_certs: false
+        namespace: "{{ oc_project.stdout }}"
+        name: test-data-pvc
+        api_version: v1
+        kind: PersistentVolumeClaim
+        state: absent
+        wait: true
+        wait_condition:
+          type: Complete
+        wait_timeout: 300
+
+    # Why k8s module can't be used here:
+    # https://github.com/ansible/ansible/issues/55221#issuecomment-501792651
+    - name: create test job in openshift
+      ansible.builtin.shell: oc create -f {{ test_job_path }}
+    - name: Wait for tests to finish
+      k8s:
+        host: "{{ oc_server.stdout }}"
+        api_key: "{{ kubeconfig_token.stdout }}"
+        validate_certs: false
+        namespace: "{{ oc_project.stdout }}"
+        name: "{{ tests_job_name }}"
+        api_version: v1
+        kind: Job
+        wait: true
+        wait_condition:
+          type: Complete
+        wait_timeout: 300
+      ignore_errors: true # we want to see logs either way
+    - name: get test results
+      k8s_info:
+        host: "{{ oc_server.stdout }}"
+        api_key: "{{ kubeconfig_token.stdout }}"
+        validate_certs: false
+        namespace: "{{ oc_project.stdout }}"
+        kind: Job
+        name: "{{ tests_job_name }}"
+      register: test_results
+    - name: get test logs
+      ansible.builtin.command: oc logs job/{{ tests_job_name }}
+      # if the tests fail, halt
+    - name: get test result
+      ansible.builtin.shell: oc get job {{ tests_job_name }} -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' | grep True
+
+      # run a new pod, mount the PV with the recorded responses to the new pod
+    - name: start pod which will gather the data
+      ansible.builtin.shell: oc create -f {{ get_data_path }}
+    - name: wait for the pod to be in a running state so we can copy the files-avant
+      k8s:
+        host: "{{ oc_server.stdout }}"
+        api_key: "{{ kubeconfig_token.stdout }}"
+        validate_certs: false
+        namespace: "{{ oc_project.stdout }}"
+        name: get-requre-data
+        api_version: v1
+        kind: Pod
+        wait: true
+        wait_condition:
+          type: Ready
+        wait_timeout: 100
+    # rsync works only on a running pod
+    - name: get generated responses from the pod
+      ansible.builtin.command: oc rsync pod/get-requre-data:{{ remote_data_dir }} {{ local_data_dir }}
+
+    - name: get the git config name in worker /src
+      ansible.builtin.command: oc exec packit-worker-0 -- bash -c "cd /src && git config --global user.name"
+      register: git_name
+
+    - name: get the git config email in worker /src
+      ansible.builtin.command: oc exec packit-worker-0 -- bash -c "cd /src && git config --global user.email"
+      register: git_email
+
+    - name: check the git config values
+      ansible.builtin.assert:
+        that:
+          - git_name.stdout == "Packit"
+          - git_email.stdout == "hello@packit.dev"
+        msg:
+          - "Incorrect git config values: {{ git_name.stdout }} , {{ git_email.stdout }}"

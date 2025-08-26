@@ -1,0 +1,14 @@
+# Copyright Contributors to the Packit project.
+# SPDX-License-Identifier: MIT
+
+---
+- name: Avant prepare
+  hosts: all
+  tasks:
+    - name: Rename run_worker.sh
+      ansible.builtin.command: mv /usr/bin/run_worker.sh /usr/bin/run_worker_.sh
+    - name: Install our run_worker.sh
+      ansible.builtin.copy:
+        src: run_worker.sh
+        dest: /usr/bin/
+        mode: 0777

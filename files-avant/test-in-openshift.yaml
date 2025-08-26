@@ -1,0 +1,57 @@
+---
+kind: Job
+apiVersion: batch/v1
+metadata:
+  name: packit-tests
+spec:
+  template:
+    spec:
+      volumes:
+        - name: packit-secrets
+          secret: { secretName: packit-secrets }
+        - name: packit-config
+          secret: { secretName: packit-config }
+        - name: test-src-pv
+          persistentVolumeClaim: { claimName: test-src-pvc }
+        - name: test-data-pv
+          persistentVolumeClaim: { claimName: test-data-pvc }
+      restartPolicy: Never
+      containers:
+        - name: packit-tests
+          image: quay.io/packit/packit-service-tests:stg
+          # If tag is latest, defaults to Always.
+          # imagePullPolicy: Never # IfNotPresent
+          workingDir: /src
+          env:
+            - name: POSTGRESQL_USER
+              valueFrom:
+                secretKeyRef: { name: postgres-secret, key: database-user }
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: postgres-secret, key: database-password }
+            - name: POSTGRESQL_HOST
+              valueFrom:
+                secretKeyRef: { name: postgres-secret, key: database-host }
+            - name: POSTGRESQL_DATABASE
+              valueFrom:
+                secretKeyRef: { name: postgres-secret, key: database-name }
+          volumeMounts:
+            - name: packit-secrets
+              mountPath: /secrets
+            - name: packit-config
+              mountPath: /home/packit/.config
+            - name: test-src-pv
+              mountPath: /src
+            - name: test-data-pv
+              mountPath: /tmp/test_data
+          command: ["bash", "/src/files-avant/run_tests.sh"]
+  backoffLimit: 1
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: test-data-pvc
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests: { storage: 1Gi }

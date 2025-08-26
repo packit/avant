@@ -14,7 +14,7 @@
     name: packit-service-tests
     parent: base
     description: Run tests of packit-service
-    run: files/zuul-tests.yaml
+    run: files-avant/zuul-tests.yaml
 
 - job:
     name: packit-service-tests-openshift
@@ -27,8 +27,8 @@
       with_testing: true
       deployment: dev
     pre-run:
-      - files/packit-service-image.yaml
-      - files/deployment.yaml
+      - files-avant/packit-service-image.yaml
+      - files-avant/deployment.yaml
       # having the check as separate job would be nicer, but waste of resources
-      - files/deployment-check.yaml
-    run: files/zuul-tests-requre.yaml
+      - files-avant/deployment-check.yaml
+    run: files-avant/zuul-tests-requre.yaml
