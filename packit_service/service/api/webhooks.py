@@ -461,7 +461,7 @@ class ForgejoWebhook(Resource):
             "release": action == "published",
             "issues": action in {"opened", "edited", "closed", "reopened"},
             "issue_comment": action in {"created", "edited"},
-            "pull_request": action in {"opened", "edited", "closed", "reopened", "synchronize"},
+            "pull_request": action in {"opened", "edited", "closed", "reopened", "synchronized"},
         }
         _interested = interests.get(event or "", False)
 

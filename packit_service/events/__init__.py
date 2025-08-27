@@ -3,10 +3,15 @@
 
 from . import (
     abstract,
+    anitya,
     copr,
     enums,
     event,
+    github,
+    gitlab,
+    koji,
     forgejo,
+    openscanhub,
     pagure,
     testing_farm,
     vm_image,
@@ -14,7 +19,12 @@ from . import (
 
 __all__ = [
     abstract.__name__,
+    anitya.__name__,
+    github.__name__,
+    gitlab.__name__,
+    koji.__name__,
     forgejo.__name__,
+    openscanhub.__name__,
     pagure.__name__,
     copr.__name__,
     enums.__name__,

@@ -165,6 +165,9 @@ class Parser:
         action_str = event.get("action")
         # Only trigger for these actions
         supported_actions = {"opened", "reopened", "synchronize"}
+        if action_str == "synchronized":
+            action_str = "synchronize"
+            event["action"] = action_str
         if action_str not in supported_actions:
             logger.info(f"Skipping PR action: {action_str}")
             return None
