@@ -104,7 +104,8 @@ services:
       AWS_ACCESS_KEY_ID: ""
       AWS_SECRET_ACCESS_KEY: ""
       GIT_SSH_COMMAND: "ssh -F /home/packit/.ssh/config"
-      FORGEJO_TOKEN: d93cb7c9d9b90b8ec6986e4d4541c85ba155f55c
+      FORGEJO_TOKEN: ""
+
     volumes:
       - ../packit/packit:/usr/local/lib/python3.13/site-packages/packit:ro
       - ./packit_service:/usr/local/lib/python3.13/site-packages/packit_service:ro
@@ -154,6 +155,8 @@ services:
       POSTGRESQL_PASSWORD: secret-password
       POSTGRESQL_HOST: postgres
       POSTGRESQL_DATABASE: packit
+      FORGEJO_TOKEN: ""
+
     volumes:
       - ./packit_service:/src/packit_service:ro
       - ./alembic:/src/alembic:rw
@@ -161,29 +164,6 @@ services:
       - ./secrets/packit/dev/fedora.keytab:/secrets/fedora.keytab:ro
       - ./secrets/packit/dev:/secrets:ro
       - ./files/run_httpd.sh:/usr/bin/run_httpd.sh:ro
-    user: "1024"
-
-  dashboard:
-    container_name: dashboard
-    image: quay.io/packit/dashboard:stg
-    command: /usr/bin/run_httpd.sh
-    depends_on:
-      service:
-        condition: service_started
-    ports:
-      - 8443:8443
-    environment:
-      DEPLOYMENT: dev
-      REDIS_SERVICE_HOST: redis
-      POSTGRESQL_USER: packit
-      POSTGRESQL_PASSWORD: secret-password
-      POSTGRESQL_HOST: postgres
-      POSTGRESQL_DATABASE: packit
-    volumes:
-      - ./secrets/packit/dev/packit-service.yaml:/home/packit_dashboard/.config/packit-service.yaml:ro
-      - ./secrets/packit/dev/fedora.keytab:/secrets/fedora.keytab:ro
-      - ./secrets/packit/dev/fullchain.pem:/secrets/fullchain.pem:ro
-      - ./secrets/packit/dev/privkey.pem:/secrets/privkey.pem:ro
     user: "1024"
 
   fedora-messaging:
