@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import requests
+import json
 from celery import Task, signature
 from packit.config import (
     JobConfig,
@@ -15,10 +16,8 @@ from packit.config import (
 )
 from packit.config.package_config import PackageConfig
 from packit.constants import HTTP_REQUEST_TIMEOUT
+from packit_service.service.urls import get_copr_build_info_url, get_srpm_build_info_url
 
-from ogr.services.forgejo import ForgejoProject
-from ogr.services.github import GithubProject
-from ogr.services.gitlab import GitlabProject
 from packit_service.constants import (
     COPR_API_SUCC_STATE,
     COPR_SRPM_CHROOT,
@@ -28,7 +27,6 @@ from packit_service.models import (
     BuildStatus,
     CoprBuildTargetModel,
 )
-from packit_service.service.urls import get_copr_build_info_url, get_srpm_build_info_url
 from packit_service.utils import (
     dump_job_config,
     dump_package_config,
@@ -60,6 +58,9 @@ from packit_service.worker.handlers.mixin import (
 from packit_service.worker.mixin import PackitAPIWithDownstreamMixin
 from packit_service.worker.reporting import BaseCommitStatus, DuplicateCheckMode
 from packit_service.worker.result import TaskResults
+from ogr.services.forgejo import ForgejoProject
+from ogr.services.github import GithubProject
+from ogr.services.gitlab import GitlabProject
 
 logger = logging.getLogger(__name__)
 
@@ -78,12 +79,12 @@ class CoprBuildHandler(
     task_name = TaskName.copr_build
 
     def __init__(
-        self,
-        package_config: PackageConfig,
-        job_config: JobConfig,
-        event: dict,
-        celery_task: Task,
-        copr_build_group_id: Optional[int] = None,
+            self,
+            package_config: PackageConfig,
+            job_config: JobConfig,
+            event: dict,
+            celery_task: Task,
+            copr_build_group_id: Optional[int] = None,
     ):
         super().__init__(
             package_config=package_config,
@@ -186,7 +187,6 @@ class CoprBuildStartHandler(AbstractCoprBuildReportHandler):
             self.set_start_time()
             return TaskResults(success=True, details={"msg": msg})
 
-        self.pushgateway.copr_builds_started.inc()
         url = get_copr_build_info_url(self.build.id)
         self.build.set_status(BuildStatus.pending)
 
@@ -254,8 +254,6 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
             f"Copr build end reported after {reported_after_time / 60} minutes.",
         )
 
-        self.pushgateway.copr_build_end_reported_after_time.observe(reported_after_time)
-
     def set_built_packages(self):
         if self.build.built_packages:
             # packages have been already set
@@ -292,15 +290,13 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
         if self.copr_event.chroot == COPR_SRPM_CHROOT:
             return self.handle_srpm_end()
 
-        self.pushgateway.copr_builds_finished.inc()
-
         # if the build is needed only for test, it doesn't have the task_accepted_time
         if self.build.task_accepted_time:
             copr_build_time = elapsed_seconds(
                 begin=self.build.task_accepted_time,
                 end=datetime.now(timezone.utc),
             )
-            self.pushgateway.copr_build_finished_time.observe(copr_build_time)
+            logger.info(f"Copr build finished time: {copr_build_time}")
 
         # https://pagure.io/copr/copr/blob/master/f/common/copr_common/enums.py#_42
         if self.copr_event.status != COPR_API_SUCC_STATE:
@@ -335,11 +331,11 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
 
     def report_successful_build(self):
         if (
-            self.copr_build_helper.job_build
-            and self.copr_build_helper.job_build.trigger == JobConfigTriggerType.pull_request
-            and self.copr_event.pr_id
-            and isinstance(self.project, (GithubProject, GitlabProject, ForgejoProject))
-            and self.job_config.notifications.pull_request.successful_build
+                self.copr_build_helper.job_build
+                and self.copr_build_helper.job_build.trigger == JobConfigTriggerType.pull_request
+                and self.copr_event.pr_id
+                and isinstance(self.project, (GithubProject, GitlabProject, ForgejoProject))
+                and self.job_config.notifications.pull_request.successful_build
         ):
             msg = (
                 f"Congratulations! One of the builds has completed. :champagne:\n\n"
@@ -394,7 +390,7 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
             return TaskResults(success=False, details={"msg": failed_msg})
 
         for build in CoprBuildTargetModel.get_all_by_build_id(
-            str(self.copr_event.build_id),
+                str(self.copr_event.build_id),
         ):
             # from waiting_for_srpm to pending
             build.set_status(BuildStatus.pending)
@@ -421,8 +417,6 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
         The URL follows the pattern:
         https://download.copr.fedorainfracloud.org/results/{owner}/{project}/{chroot}/{build_id:08d}-{pkg}/fedora-review/review.txt
         """
-        logger.debug(f"handle_fedora_review called for build {self.copr_event.build_id}")
-        logger.debug(f"job_build: {self.copr_build_helper.job_build}")
         trigger = (
             self.copr_build_helper.job_build.trigger if self.copr_build_helper.job_build else None
         )
@@ -431,11 +425,11 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
         logger.debug(f"project type: {type(self.project)}")
 
         if (
-            # Only post fedora-review for pull requests
-            self.copr_build_helper.job_build
-            and self.copr_build_helper.job_build.trigger == JobConfigTriggerType.pull_request
-            and self.copr_event.pr_id
-            and isinstance(self.project, (GithubProject, GitlabProject, ForgejoProject))
+                # Only post fedora-review for pull requests
+                self.copr_build_helper.job_build
+                and self.copr_build_helper.job_build.trigger == JobConfigTriggerType.pull_request
+                and self.copr_event.pr_id
+                and isinstance(self.project, (GithubProject, GitlabProject, ForgejoProject))
         ):
             logger.debug("All conditions met for fedora-review comment")
             # Construct the fedora-review URL based on the pattern
@@ -444,44 +438,265 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                 f"{self.copr_event.owner}/{self.copr_event.project_name}/"
                 f"{self.copr_event.chroot}/"
                 f"{self.copr_event.build_id:08d}-{self.copr_event.pkg}/"
-                f"fedora-review/review.txt"
+                f"fedora-review/review.json"
             )
-
+            # we fetch the json file and parse it in a neat manner to post.
             try:
                 logger.debug(f"Fetching fedora-review content from: {review_url}")
                 # Fetch the review content
                 response = requests.get(review_url, timeout=HTTP_REQUEST_TIMEOUT)
                 response.raise_for_status()
 
-                # Check content type to ensure it's text
+                # Prefer JSON; fall back to plain text rendering
                 content_type = response.headers.get("content-type", "").lower()
-                if "text" not in content_type and "application/octet-stream" not in content_type:
-                    logger.warning(f"Unexpected content type '{content_type}' for review file")
-
-                # Get content and ensure it's valid text
+                parsed_json = None
+                review_content = None
                 try:
-                    review_content = response.text.strip()
-                except UnicodeDecodeError as e:
-                    logger.warning(f"Failed to decode review content as text: {e}")
-                    raise requests.RequestException(f"Invalid text content: {e}") from e
+                    if "application/json" in content_type or response.text.strip().startswith("{"):
+                        parsed_json = response.json()
+                    else:
+                        # still try JSON first; if it fails we'll treat as text
+                        parsed_json = response.json()
+                except Exception:
+                    # Treat as text
+                    try:
+                        review_content = response.text.strip()
+                    except UnicodeDecodeError as e:
+                        logger.warning(f"Failed to decode review content as text: {e}")
+                        raise requests.RequestException(f"Invalid text content: {e}") from e
+                    if not review_content:
+                        logger.warning(f"Empty review content fetched from {review_url}")
+                        review_content = "No review content available."
 
-                # Handle empty or invalid content
-                if not review_content:
-                    logger.warning(f"Empty review content fetched from {review_url}")
-                    review_content = "No review content available."
+                # Start message: minimal and unobtrusive
+                msg = (
+                    f"Fedora review completed for {self.copr_event.pkg} on {self.copr_event.chroot}.\n\n"
+                )
 
-                # Limit content size to prevent comment size issues (max ~50KB)
-                max_content_length = 50000
-                content_truncated = False
-                if len(review_content) > max_content_length:
-                    review_content = (
-                        review_content[:max_content_length]
-                        + "\n\n[Content truncated due to size limits]"
+                if parsed_json is not None:
+                    # Summarize results
+                    def summarize_results(data: dict) -> tuple[str, list[dict], dict]:
+                        total_pass = total_pending = total_fail = 0
+                        failed_items: list[dict] = []
+                        by_severity = {"MUST": {"pass": 0, "pending": 0, "fail": 0},
+                                       "SHOULD": {"pass": 0, "pending": 0, "fail": 0},
+                                       "EXTRA": {"pass": 0, "pending": 0, "fail": 0}}
+
+                        # top-level issues
+                        for issue in data.get("issues", []) or []:
+                            res = (issue or {}).get("result")
+                            if res == "pass":
+                                total_pass += 1
+                            elif res == "pending":
+                                total_pending += 1
+                            elif res == "fail":
+                                total_fail += 1
+                                failed_items.append(issue)
+
+                        # nested results
+                        results = data.get("results", {}) or {}
+                        for severity, sev_payload in results.items():
+                            if not isinstance(sev_payload, dict):
+                                continue
+                            for group, items in sev_payload.items():
+                                if not isinstance(items, list):
+                                    continue
+                                for it in items:
+                                    res = (it or {}).get("result")
+                                    if res == "pass":
+                                        total_pass += 1
+                                        if severity in by_severity:
+                                            by_severity[severity]["pass"] += 1
+                                    elif res == "pending":
+                                        total_pending += 1
+                                        if severity in by_severity:
+                                            by_severity[severity]["pending"] += 1
+                                    elif res == "fail":
+                                        total_fail += 1
+                                        if severity in by_severity:
+                                            by_severity[severity]["fail"] += 1
+                                        # enrich with context
+                                        failed_items.append({
+                                            "severity": severity,
+                                            "group": group,
+                                            "name": it.get("name"),
+                                            "text": it.get("text"),
+                                            "note": it.get("note"),
+                                            "url": it.get("url"),
+                                        })
+
+                        summary_line = (
+                            f"Summary: {total_fail} fail, {total_pending} pending, {total_pass} pass."
+                        )
+                        return summary_line, failed_items, by_severity
+
+                    summary_line, failed_items, by_severity = summarize_results(parsed_json)
+
+                    # Brief insights (non-obtrusive): key fails and section counts
+                    insights: list[str] = []
+                    # Highlight specific common failure if present
+                    for fi in failed_items:
+                        if fi.get("name") == "CheckNoNameConflict" or (
+                                (fi.get("text") or "").lower().startswith(
+                                    "package does not use a name that already exists")
+                        ):
+                            link = fi.get("url") or ""
+                            insight = "Name conflict detected (package name already exists)"
+                            if link:
+                                insight += f" — see {link}"
+                            insights.append(insight)
+                            break
+
+                    # Per-section counts
+                    for sev in ("MUST", "SHOULD", "EXTRA"):
+                        counts = by_severity.get(sev, {})
+                        if counts:
+                            insights.append(
+                                f"{sev}: {counts.get('fail', 0)} fail, {counts.get('pending', 0)} pending, {counts.get('pass', 0)} pass"
+                            )
+
+                    if insights:
+                        msg += "\n".join(f"- {line}" for line in insights) + "\n\n"
+
+                    # Minimal COPR instructions inline
+                    msg += (
+                        f"Install from COPR: `dnf copr enable {self.copr_event.owner}/{self.copr_event.project_name}; "
+                        f"sudo dnf install {self.copr_event.pkg}`\n\n"
                     )
-                    content_truncated = True
-                    logger.debug(
-                        f"Review content truncated from {len(response.text)} to "
-                        f"{len(review_content)} characters"
+
+                    # Failed checks list (limit to 10)
+                    fail_lines = []
+                    for idx, fi in enumerate(failed_items[:10], start=1):
+                        name = fi.get("name") or fi.get("text") or "Failed check"
+                        text = fi.get("text") or ""
+                        url = fi.get("url")
+                        ctx = []
+                        if fi.get("severity"):
+                            ctx.append(fi.get("severity"))
+                        if fi.get("group"):
+                            ctx.append(fi.get("group"))
+                        ctx_str = f" ({' / '.join(ctx)})" if ctx else ""
+                        if url:
+                            fail_lines.append(f"{idx}. [{name}]({url}){ctx_str} — {text}")
+                        else:
+                            fail_lines.append(f"{idx}. {name}{ctx_str} — {text}")
+
+                    if failed_items:
+                        msg += f"**{summary_line}**\n\n"
+                        msg += "<details>\n<summary><strong>Failed checks</strong> (" \
+                               f"{len(failed_items)})</summary>\n\n"
+                        msg += "\n".join(fail_lines)
+                        if len(failed_items) > 10:
+                            msg += f"\n\n… and {len(failed_items) - 10} more."
+                        msg += "\n\n</details>\n\n"
+                    else:
+                        msg += f"**{summary_line}**\n\n"
+
+                    # Full parsed details (human-readable) inside collapsible
+                    def render_parsed_details(data: dict) -> str:
+                        lines: list[str] = []
+                        # Top-level issues
+                        issues = data.get("issues") or []
+                        if issues:
+                            lines.append("Issues:")
+                            for it in issues:
+                                name = (it or {}).get("name") or "Issue"
+                                res = (it or {}).get("result") or ""
+                                txt = (it or {}).get("text") or ""
+                                note = (it or {}).get("note")
+                                url = (it or {}).get("url")
+                                line = f"- [{res}] {name}: {txt}"
+                                if note:
+                                    line += f" | Note: {note}"
+                                if url:
+                                    line += f" | Ref: {url}"
+                                lines.append(line)
+                            lines.append("")
+
+                        # Detailed results by severity and group
+                        results = data.get("results", {}) or {}
+                        for severity in ("MUST", "SHOULD", "EXTRA"):
+                            sev_payload = results.get(severity)
+                            if not isinstance(sev_payload, dict):
+                                continue
+                            lines.append(f"{severity}:")
+                            for group, items in sev_payload.items():
+                                if not isinstance(items, list) or not items:
+                                    continue
+                                lines.append(f"  {group}:")
+                                for it in items:
+                                    res = (it or {}).get("result") or ""
+                                    name = (it or {}).get("name") or "Check"
+                                    txt = (it or {}).get("text") or ""
+                                    note = (it or {}).get("note")
+                                    url = (it or {}).get("url")
+                                    line = f"  - [{res}] {name}: {txt}"
+                                    if note:
+                                        line += f" | Note: {note}"
+                                    if url:
+                                        line += f" | Ref: {url}"
+                                    lines.append(line)
+                            lines.append("")
+
+                        # Extras
+                        attachments = data.get("attachments") or []
+                        if attachments:
+                            lines.append("Attachments summary:")
+                            for att in attachments:
+                                header = (att or {}).get("header") or "Attachment"
+                                txt = (att or {}).get("text") or ""
+                                preview = txt.strip().splitlines()[:2]
+                                preview_str = " ".join(preview).strip()
+                                if len(preview_str) > 120:
+                                    preview_str = preview_str[:120] + "…"
+                                lines.append(f"- {header}: {preview_str}")
+                            lines.append("")
+
+                        rendered = "\n".join(lines).strip()
+                        # Limit verbosity in the comment field
+                        max_len = 50000
+                        if len(rendered) > max_len:
+                            rendered = rendered[:max_len] + "\n\n[Content truncated due to size limits]"
+                        return rendered
+
+                    details_text = render_parsed_details(parsed_json)
+                    msg += "<details>\n<summary><strong>Full review details</strong></summary>\n\n"
+                    msg += "```\n" + details_text + "\n```\n"
+                    msg += "</details>\n\n"
+
+                    # Attachments section if present
+                    attachments = parsed_json.get("attachments") or []
+                    if attachments:
+                        msg += "<details>\n<summary><strong>Attachments</strong></summary>\n\n"
+                        for att in attachments:
+                            header = (att or {}).get("header") or "Attachment"
+                            text = (att or {}).get("text") or ""
+                            msg += f"### {header}\n\n"
+                            # keep inside code fence to preserve formatting
+                            # limit oversized attachment
+                            display = text
+                            if len(display) > 30000:
+                                display = display[:30000] + "\n\n[Content truncated due to size limits]"
+                            msg += "```\n" + display + "\n```\n\n"
+                        msg += "</details>\n\n"
+                    # Source link
+                    msg += f"Review source: [review.json]({review_url})\n"
+                else:
+                    # Plain text fallback rendering with collapsible
+                    max_content_length = 50000
+                    content_truncated = False
+                    if len(review_content) > max_content_length:
+                        display = review_content[:max_content_length] + "\n\n[Content truncated due to size limits]"
+                        content_truncated = True
+                    else:
+                        display = review_content
+
+                    msg += (
+                        f"<details>\n"
+                        f"<summary><strong>Full review report (text)</strong></summary>\n\n"
+                        f"```\n{display}\n```\n"
+                        f"</details>\n\n"
+                        f"Review source: [review.txt]({review_url})"
                     )
 
                 # Create COPR repository installation instructions
@@ -569,14 +784,14 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
 
         for job_config in self.copr_build_helper.job_tests_all:
             if (
-                # we need to check the labels here
-                # the same way as when scheduling jobs for event
-                (
-                    job_config.trigger != JobConfigTriggerType.pull_request
-                    or not (job_config.require.label.present or job_config.require.label.absent)
-                )
-                and self.copr_event.chroot
-                in self.copr_build_helper.build_targets_for_test_job(job_config)
+                    # we need to check the labels here
+                    # the same way as when scheduling jobs for event
+                    (
+                            job_config.trigger != JobConfigTriggerType.pull_request
+                            or not (job_config.require.label.present or job_config.require.label.absent)
+                    )
+                    and self.copr_event.chroot
+                    in self.copr_build_helper.build_targets_for_test_job(job_config)
             ):
                 event_dict["tests_targets_override"] = [
                     (target, job_config.identifier)

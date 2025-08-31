@@ -18,10 +18,10 @@ class StatusReporterForgejo(StatusReporter):
     def get_commit_status(state: BaseCommitStatus):
         mapped_state = StatusReporter.get_commit_status(state)
 
-        # Forgejo doesn't support running state, map to pending like GitHub
+        # Forgejo doesn't support 'running' state, map to pending like GitHub
         if mapped_state == CommitStatus.running:
             mapped_state = CommitStatus.pending
-        # Forgejo doesn't support error state, map to failure
+        # Forgejo doesn't support 'error' state, map to failure
         elif mapped_state == CommitStatus.error:
             mapped_state = CommitStatus.failure
         return mapped_state

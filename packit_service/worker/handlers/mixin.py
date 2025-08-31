@@ -7,12 +7,9 @@ from typing import Optional, Protocol, Union
 
 from packit.config import JobConfig, PackageConfig
 
-from packit_service.config import ProjectToSync
 from packit_service.constants import COPR_SRPM_CHROOT
 from packit_service.events import (
     copr,
-    forgejo,
-    pagure,
 )
 from packit_service.events.event_data import EventData
 from packit_service.models import (
@@ -20,7 +17,6 @@ from packit_service.models import (
     ProjectEventModel,
     SRPMBuildModel,
 )
-from packit_service.utils import get_packit_commands_from_comment
 from packit_service.worker.handlers.abstract import CeleryTask
 from packit_service.worker.helpers.build.copr_build import CoprBuildJobHelper
 from packit_service.worker.helpers.testing_farm import TestingFarmJobHelper
@@ -207,102 +203,3 @@ class GetTestingFarmJobHelperMixin(
                 celery_task=self.celery_task,
             )
         return self._testing_farm_job_helper
-
-
-class GetGithubCommentEvent(Protocol):
-    @abstractmethod
-    def is_comment_event(self) -> bool: ...
-
-    @abstractmethod
-    def is_copr_build_comment_event(self) -> bool: ...
-
-
-class GetGithubCommentEventMixin(GetGithubCommentEvent, ConfigFromEventMixin):
-    def is_comment_event(self) -> bool:
-        return self.data.event_type in (
-            forgejo.pr.Comment.event_type(),
-            pagure.pr.Comment.event_type(),
-        )
-
-    def is_copr_build_comment_event(self) -> bool:
-        return self.is_comment_event() and get_packit_commands_from_comment(
-            self.data.event_dict.get("comment"),
-            packit_comment_command_prefix=self.service_config.comment_command_prefix,
-        )[0] in ("build", "copr-build")
-
-
-class GetProjectToSync(Protocol):
-    @property
-    @abstractmethod
-    def dg_repo_name(self) -> str: ...
-
-    @property
-    @abstractmethod
-    def dg_branch(self) -> str: ...
-
-    @property
-    @abstractmethod
-    def project_to_sync(self) -> Optional[ProjectToSync]: ...
-
-
-class GetProjectToSyncMixin(ConfigFromEventMixin, GetProjectToSync):
-    _project_to_sync: Optional[ProjectToSync] = None
-
-    @property
-    def dg_repo_name(self) -> str:
-        return self.data.event_dict.get("repo_name")
-
-    @property
-    def dg_branch(self) -> str:
-        return self.data.event_dict.get("git_ref")
-
-    @property
-    def project_to_sync(self) -> Optional[ProjectToSync]:
-        if self._project_to_sync is None and (
-            project_to_sync := self.service_config.get_project_to_sync(
-                dg_repo_name=self.dg_repo_name,
-                dg_branch=self.dg_branch,
-            )
-        ):
-            self._project_to_sync = project_to_sync
-        return self._project_to_sync
-
-
-class GetVMImageBuilder(Protocol):
-    @property
-    @abstractmethod
-    def vm_image_builder(self): ...
-
-
-class GetVMImageData(Protocol):
-    @property
-    @abstractmethod
-    def build_id(self) -> str: ...
-
-    @property
-    @abstractmethod
-    def chroot(self) -> str: ...
-
-    @property
-    @abstractmethod
-    def identifier(self) -> str: ...
-
-    @property
-    @abstractmethod
-    def owner(self) -> str: ...
-
-    @property
-    @abstractmethod
-    def project_name(self) -> str: ...
-
-    @property
-    @abstractmethod
-    def image_distribution(self) -> str: ...
-
-    @property
-    @abstractmethod
-    def image_request(self) -> dict: ...
-
-    @property
-    @abstractmethod
-    def image_customizations(self) -> dict: ...
