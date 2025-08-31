@@ -34,7 +34,11 @@ class PackageConfigGetter:
         fail_when_missing: bool = True,
     ) -> Optional[PackageConfig]:
         """
-        Get the package config and catch the invalid config scenario and possibly no-config scenario
+        Construct a package config from the specfile in the repo.
+
+        The config has the following jobs
+        - copr_build
+        - tests
         """
 
         if not base_project and not project:

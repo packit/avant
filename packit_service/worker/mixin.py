@@ -196,19 +196,6 @@ class PackitAPIWithUpstreamMixin(PackitAPIProtocol):
             self._packit_api.clean()
 
 
-class GetSyncReleaseTagMixin(PackitAPIWithUpstreamMixin):
-    _tag: Optional[str] = None
-
-    @property
-    def tag(self) -> Optional[str]:
-        self._tag = self.data.tag_name
-        if not self._tag and not self.non_git_upstream:
-            # there is no tag information when retriggering pull-from-upstream
-            # from dist-git PR
-            self._tag = self.packit_api.up.get_last_tag()
-        return self._tag
-
-
 class LocalProjectMixin(Config):
     _local_project: Optional[LocalProject] = None
 
@@ -246,33 +233,6 @@ class LocalProjectMixin(Config):
         return self._local_project
 
 
-class GetPagurePullRequest(Protocol):
-    @property
-    @abstractmethod
-    def pull_request(self) -> PullRequest: ...
-
-    @abstractmethod
-    def get_pr_author(self) -> Optional[str]: ...
-
-
-class GetPagurePullRequestMixin(GetPagurePullRequest):
-    _pull_request: Optional[PullRequest] = None
-
-    @property
-    def pull_request(self):
-        if not self._pull_request and self.data.pr_id is not None:
-            logger.debug(
-                f"Getting pull request #{self.data.pr_id}"
-                f"for repo {self.project.namespace}/{self.project.repo}",
-            )
-            self._pull_request = self.project.get_pr(self.data.pr_id)
-        return self._pull_request
-
-    def get_pr_author(self):
-        """Get the login of the author of the PR (if there is any corresponding PR)."""
-        return self.pull_request.author if self.pull_request else None
-
-
 class GetIssue(Protocol):
     @property
     @abstractmethod
@@ -293,37 +253,6 @@ class GetBranches(Protocol):
     @property
     @abstractmethod
     def branches(self) -> list[str]: ...
-
-
-class GetBranchesFromIssueMixin(Config, GetBranches):
-    @property
-    def branches(self) -> list[str]:
-        """Get branches names from an issue comment like the following:
-
-        ```
-        Packit failed on creating pull-requests in dist-git
-            (https://src.fedoraproject.org/rpms/python-teamcity-messages):
-
-        | dist-git branch | error |
-        | --------------- | ----- |
-        | `f37` | `` |
-
-
-        You can retrigger the update by adding a comment
-            (`/packit propose-downstream`) into this issue.
-        ```
-        """
-        branches = set()
-        branch_regex = re.compile(r"\s*\| `(\S+)` \|")
-        issue = self.data.project.get_issue(self.data.issue_id)
-        for line in issue.description.splitlines():
-            if m := branch_regex.match(line):
-                branches.add(m[1])
-        for comment in issue.get_comments():
-            for line in comment.body.splitlines():
-                if m := branch_regex.match(line):
-                    branches.add(m[1])
-        return list(branches)
 
 
 class GetReporter(Protocol):
