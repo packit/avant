@@ -11,3 +11,4 @@ secrets
 /build/
 __pycache__/
 files/python3-ogr.rpm
+docker-compose.yml
