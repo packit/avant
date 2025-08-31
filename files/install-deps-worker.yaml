@@ -13,12 +13,12 @@
       ansible.builtin.dnf:
         name:
           - nss_wrapper # openshift anyuid passwd madness
+          - python3-pip
           - python3-requests
           - python3-prometheus_client
           - python3-sqlalchemy
           - python3-psycopg2
           - python3-redis
-          - python3-celery
           - python3-lazy-object-proxy
           - python3-sentry-sdk
           - python3-syslog-rfc5424-formatter # logging to Splunk
@@ -42,6 +42,9 @@
           - python3-websocket-client
           # for the `pkg_tool` switch to allow centpkg
           - centpkg
+          - gcc
+          - libffi-devel
+          - python3-devel
         state: present
         install_weak_deps: False
     - name: Install pip deps
@@ -49,18 +52,23 @@
         name:
           - git+https://github.com/packit/sandcastle.git@{{ source_branch }}
           - eventlet
-    - name: Install guppy3 for memory profiling in non production environments
-      ansible.builtin.pip:
-        name:
-          - guppy3
+          - celery
+      #    - name: Install guppy3 for memory profiling in non production environments
+      #      ansible.builtin.pip:
+      #        name:
+      #          - guppy3
       when: deployment != 'prod'
     - name: Check if all pip packages have all dependencies installed
       command: pip check
-    - import_tasks: tasks/setup-copr-repos.yaml
-    - name: Install ogr, specfile and packit from copr
+
+    - name: Install custom python3-ogr package from local RPM
+      ansible.builtin.dnf:
+        name: /src/files/python3-ogr.rpm
+        state: present
+        disable_gpg_check: true
+    - name: Install specfile and packit from copr
       ansible.builtin.dnf:
         name:
-          - python3-ogr
           - python3-specfile
           - packit
         state: latest

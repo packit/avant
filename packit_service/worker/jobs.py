@@ -603,7 +603,6 @@ class SteveJobs:
             )
             return []
 
-        allowlist = Allowlist(service_config=self.service_config)
         processing_results: list[TaskResults] = []
 
         statuses_check_feedback: list[datetime] = []
@@ -616,20 +615,6 @@ class SteveJobs:
 
             # check allowlist approval for every job to be able to track down which jobs
             # failed because of missing allowlist approval
-            if not allowlist.check_and_report(
-                self.event,
-                self.event.project,
-                job_configs=job_configs,
-            ):
-                return [
-                    TaskResults.create_from(
-                        success=False,
-                        msg="Account is not allowlisted!",
-                        job_config=job_config,
-                        event=self.event,
-                    )
-                    for job_config in job_configs
-                ]
 
             processing_results.extend(
                 self.create_tasks(job_configs, handler_kls, statuses_check_feedback),
@@ -706,14 +691,6 @@ class SteveJobs:
         Returns:
             Whether the task should be created.
         """
-        if self.service_config.deployment not in job_config.packit_instances:
-            logger.debug(
-                f"Current deployment ({self.service_config.deployment}) "
-                f"does not match the job configuration ({job_config.packit_instances}). "
-                "The job will not be run.",
-            )
-            return False
-
         return handler_kls.pre_check(
             package_config=(
                 self.event.packages_config.get_package_config_for(job_config)

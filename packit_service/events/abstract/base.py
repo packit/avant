@@ -18,6 +18,7 @@ from packit_service.models import (
 from packit_service.package_config_getter import PackageConfigGetter
 
 from ..event import Event
+from ...worker.spec_to_config import SpecToConfig
 
 logger = getLogger(__name__)
 
@@ -96,13 +97,29 @@ class ForgeIndependent(Event):
             f"\tpr_id: {self.pr_id}",
         )
 
-        return PackageConfigGetter.get_package_config_from_repo(
-            base_project=self.base_project,
-            project=self.project,
-            reference=self.commit_sha,
-            pr_id=self.pr_id,
-            fail_when_missing=self.fail_when_config_file_missing,
-        )
+        try:
+            package_config = PackageConfigGetter.get_package_config_from_repo(
+                base_project=self.base_project,
+                project=self.project,
+                reference=self.commit_sha,
+                pr_id=self.pr_id,
+                fail_when_missing=self.fail_when_config_file_missing,
+            )
+
+            if package_config is None:
+                raise Exception(f"Could not get package_config for {self.commit_sha}")
+
+            return package_config
+        except:
+            pull_request = self.project.get_pr(self.pr_id)
+            source_commit = pull_request.head_commit
+            package_config = SpecToConfig.get_package_config_from_repo(
+                project=self.project,
+                reference=source_commit,
+                pr_id=self.pr_id,
+                fail_when_missing=False,
+            )
+            return package_config
 
     def get_all_tf_targets_by_status(
         self,
