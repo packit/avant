@@ -7,17 +7,13 @@ from packit_service.constants import (
     DOCS_TESTING_FARM,
     INTERNAL_TF_BUILDS_AND_TESTS_NOT_ALLOWED,
     INTERNAL_TF_TESTS_NOT_ALLOWED,
-    KojiTaskState,
 )
-from packit_service.events import gitlab
 from packit_service.worker.checker.abstract import (
     ActorChecker,
     Checker,
 )
 from packit_service.worker.handlers.mixin import (
     GetCoprBuildMixin,
-    GetGithubCommentEventMixin,
-    GetKojiBuildFromTaskOrPullRequestMixin,
     GetTestingFarmJobHelperMixin,
 )
 from packit_service.worker.reporting import BaseCommitStatus
@@ -36,16 +32,8 @@ class IsEventOk(
     Checker,
     GetTestingFarmJobHelperMixin,
     GetCoprBuildMixin,
-    GetGithubCommentEventMixin,
 ):
     def pre_check(self) -> bool:
-        if (
-            self.data.event_type == gitlab.mr.Action.event_type()
-            and self.data.event_dict["action"] == gitlab.enums.Action.closed.value
-        ):
-            # Not interested in closed merge requests
-            return False
-
         if self.testing_farm_job_helper.is_test_comment_pr_argument_present():
             return self.testing_farm_job_helper.check_comment_pr_argument_and_report()
 
@@ -53,20 +41,6 @@ class IsEventOk(
             self.testing_farm_job_helper.skip_build
             and self.testing_farm_job_helper.is_copr_build_comment_event()
         )
-
-
-class IsEventOkForFedoraCI(
-    Checker,
-    GetKojiBuildFromTaskOrPullRequestMixin,
-):
-    def pre_check(self) -> bool:
-        if not self.koji_build:
-            return False
-
-        if self.koji_build.status == "success":
-            return True
-
-        return bool(self.koji_task_event and self.koji_task_event.state == KojiTaskState.closed)
 
 
 class IsEventForJob(Checker):

@@ -6,9 +6,6 @@ from functools import partial
 from typing import Callable, Optional, Union
 
 from lazy_object_proxy import Proxy
-from ogr.abstract import GitProject, PullRequest
-from ogr.exceptions import GitlabAPIException
-from ogr.services.gitlab import GitlabProject
 from packit.api import PackitAPI
 from packit.config import JobConfig
 from packit.config.package_config import PackageConfig
@@ -20,6 +17,9 @@ from packit.local_project import (
 )
 from packit.utils.repo import RepositoryCache
 
+from ogr.abstract import GitProject, PullRequest
+from ogr.exceptions import GitlabAPIException
+from ogr.services.gitlab import GitlabProject
 from packit_service.config import Deployment, ServiceConfig
 from packit_service.events.event_data import EventData
 from packit_service.models import (

@@ -16,7 +16,6 @@ task_ignore_result = True
 imports = ("packit_service.worker.tasks", "packit_service.service.tasks")
 
 task_routes = {
-    "task.babysit_vm_image_build": "long-running",
     "task.babysit_copr_build": "long-running",
     "packit_service.service.tasks.get_past_usage_data": "long-running",
     "packit_service.service.tasks.get_usage_interval_data": "long-running",
@@ -32,11 +31,6 @@ beat_schedule = {
     "update-pending-tft-runs": {
         "task": "packit_service.worker.tasks.babysit_pending_tft_runs",
         "schedule": 600.0,
-        "options": {"queue": "long-running"},
-    },
-    "update-pending-vm-image-builds": {
-        "task": "packit_service.worker.tasks.babysit_pending_vm_image_builds",
-        "schedule": 3600.0,
         "options": {"queue": "long-running"},
     },
     "database-maintenance": {

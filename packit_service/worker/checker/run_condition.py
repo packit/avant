@@ -8,7 +8,6 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from ogr.services.pagure import PagureProject
 from packit.actions import ActionName
 from packit.actions_handler import ActionsHandler
 from packit.command_handler import (
@@ -20,11 +19,9 @@ from packit.config import JobConfig, PackageConfig
 from packit.exceptions import PackitCommandFailedError
 from specfile import Specfile
 
+from ogr.services.pagure import PagureProject
 from packit_service.events import (
-    anitya,
-    github,
-    gitlab,
-    koji,
+    forgejo,
     pagure,
 )
 from packit_service.worker.checker.abstract import Checker
@@ -109,36 +106,19 @@ class IsRunConditionSatisfied(Checker, ConfigFromEventMixin, PackitAPIWithUpstre
         version = None
 
         if self.data.event_type in (
-            github.pr.Action.event_type(),
+            forgejo.pr.Action.event_type(),
             pagure.pr.Action.event_type(),
-            gitlab.mr.Action.event_type(),
-            github.pr.Comment.event_type(),
+            forgejo.pr.Comment.event_type(),
             pagure.pr.Comment.event_type(),
-            gitlab.mr.Comment.event_type(),
             pagure.pr.Flag.event_type(),
-            github.check.PullRequest.event_type(),
         ):
             project = self.project.get_pr(int(self.data.pr_id)).source_project
-        elif self.data.event_type in (anitya.NewHotness.event_type(),):
-            event = anitya.NewHotness.from_event_dict(self.data.event_dict)
-            project = event.project
-            git_ref = event.tag_name
-            version = event.version
-        elif self.data.event_type in (
-            github.issue.Comment.event_type(),
-            gitlab.issue.Comment.event_type(),
-        ):
+        elif self.data.event_type in (forgejo.issue.Comment.event_type(),):
             if self.task_name not in ("task.run_propose_downstream_handler",):
                 project = self.service_config.get_project(
                     url=self.data.event_dict.get("dist_git_project_url")
                 )
             git_ref = "HEAD"
-        elif self.data.event_type in (koji.tag.Build.event_type(),):
-            git_ref = "HEAD"
-            version = self.data.event_dict.get("version")
-        elif self.data.event_type in (koji.result.Build.event_type(),):
-            git_ref = self.data.event_dict.get("commit_sha")
-            version = self.data.event_dict.get("version")
 
         extra_env = {}
 
