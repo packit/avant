@@ -1,7 +1,7 @@
 # Avant
 
 Service to make onboarding packages to Fedora easier.
-Development is currently taking place in the `service` branch.
+Development is currently taking place in the `service` and `working` branches.
 
 ## Workflow
 
