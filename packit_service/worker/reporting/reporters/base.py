@@ -8,6 +8,7 @@ from typing import Callable, Optional, Union
 from ogr.abstract import GitProject, PullRequest
 from ogr.services.forgejo import ForgejoProject
 from ogr.services.gitlab import GitlabProject
+
 from packit_service.worker.reporting.enums import (
     MAP_TO_CHECK_RUN,
     MAP_TO_COMMIT_STATUS,

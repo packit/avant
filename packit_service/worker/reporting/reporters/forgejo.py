@@ -6,6 +6,7 @@ from typing import Optional
 
 from ogr.abstract import CommitStatus
 from ogr.exceptions import ForgejoAPIException
+
 from packit_service.worker.reporting import BaseCommitStatus
 from packit_service.worker.reporting.enums import DuplicateCheckMode
 from packit_service.worker.reporting.reporters.base import StatusReporter

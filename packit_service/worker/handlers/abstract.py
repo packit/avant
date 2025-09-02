@@ -18,11 +18,11 @@ from typing import Optional
 
 from celery import Task, signature
 from celery.canvas import Signature
+from ogr.abstract import GitProject
 from packit.config import JobConfig, JobType, PackageConfig
 from packit.config.common_package_config import Deployment
 from packit.constants import DATETIME_FORMAT
 
-from ogr.abstract import GitProject
 from packit_service.config import ServiceConfig
 from packit_service.events.event import Event
 from packit_service.events.event_data import EventData

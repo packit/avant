@@ -4,9 +4,9 @@
 from logging import getLogger
 from typing import Optional, Union
 
+from ogr.abstract import GitProject, PullRequest
 from packit.config import PackageConfig
 
-from ogr.abstract import GitProject, PullRequest
 from packit_service.config import ServiceConfig
 from packit_service.models import (
     AbstractProjectObjectDbType,

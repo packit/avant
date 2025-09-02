@@ -4,6 +4,7 @@
 import logging
 
 from ogr.services.forgejo.project import ForgejoProject
+
 from packit_service.events import forgejo
 from packit_service.worker.checker.abstract import Checker
 

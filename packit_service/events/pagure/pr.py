@@ -4,11 +4,11 @@
 from logging import getLogger
 from typing import Optional
 
-from packit.config import PackageConfig
-
 from ogr.abstract import Comment as OgrComment
 from ogr.abstract import GitProject
 from ogr.parsing import RepoUrl
+from packit.config import PackageConfig
+
 from packit_service.config import ServiceConfig
 from packit_service.package_config_getter import PackageConfigGetter
 from packit_service.service.db_project_events import (

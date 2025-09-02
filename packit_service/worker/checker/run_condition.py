@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+from ogr.services.pagure import PagureProject
 from packit.actions import ActionName
 from packit.actions_handler import ActionsHandler
 from packit.command_handler import (
@@ -19,7 +20,6 @@ from packit.config import JobConfig, PackageConfig
 from packit.exceptions import PackitCommandFailedError
 from specfile import Specfile
 
-from ogr.services.pagure import PagureProject
 from packit_service.events import (
     forgejo,
     pagure,

@@ -1,10 +1,10 @@
 # Copyright Contributors to the Packit project.
 # SPDX-License-Identifier: MIT
 
-from gettext import install
 import logging
 from typing import Optional
 
+from ogr.abstract import GitProject
 from packit.config import (
     CommonPackageConfig,
     JobConfig,
@@ -18,7 +18,6 @@ from packit.exceptions import (
 )
 from specfile.specfile import Specfile
 
-from ogr.abstract import GitProject
 from packit_service.worker.reporting import comment_without_duplicating
 
 logger = logging.getLogger(__name__)
@@ -71,7 +70,8 @@ class PackageConfigGetter:
                     )
 
                 packages[specfile.name] = CommonPackageConfig(
-                    specfile_path=spec_path, _targets=["fedora-rawhide-x86_64"],
+                    specfile_path=spec_path,
+                    _targets=["fedora-rawhide-x86_64"],
                 )
 
             rpmlint_package = {}
@@ -81,7 +81,7 @@ class PackageConfigGetter:
                 identifier="rpmlint",
                 fmf_url="https://github.com/packit/tmt-plans",
                 tmt_plan="/plans/rpmlint",
-                fmf_ref="main"
+                fmf_ref="main",
             )
 
             install_package = {}
@@ -91,9 +91,9 @@ class PackageConfigGetter:
                 identifier="installation",
                 fmf_url="https://gitlab.com/testing-farm/tests",
                 tmt_plan="/packit/installation",
-                fmf_ref="main"
+                fmf_ref="main",
             )
-            
+
             package_config = PackageConfig(
                 packages=packages,
                 jobs=[
@@ -110,8 +110,8 @@ class PackageConfigGetter:
                     JobConfig(
                         type=JobType.tests,
                         trigger=JobConfigTriggerType.pull_request,
-                        packages=rpmlint_package
-                    )
+                        packages=rpmlint_package,
+                    ),
                 ],
             )
         except PackitConfigException as ex:
