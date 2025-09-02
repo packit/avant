@@ -7,8 +7,10 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import requests
-import json
 from celery import Task, signature
+from ogr.services.forgejo import ForgejoProject
+from ogr.services.github import GithubProject
+from ogr.services.gitlab import GitlabProject
 from packit.config import (
     JobConfig,
     JobConfigTriggerType,
@@ -16,7 +18,6 @@ from packit.config import (
 )
 from packit.config.package_config import PackageConfig
 from packit.constants import HTTP_REQUEST_TIMEOUT
-from packit_service.service.urls import get_copr_build_info_url, get_srpm_build_info_url
 
 from packit_service.constants import (
     COPR_API_SUCC_STATE,
@@ -27,6 +28,7 @@ from packit_service.models import (
     BuildStatus,
     CoprBuildTargetModel,
 )
+from packit_service.service.urls import get_copr_build_info_url, get_srpm_build_info_url
 from packit_service.utils import (
     dump_job_config,
     dump_package_config,
@@ -58,9 +60,6 @@ from packit_service.worker.handlers.mixin import (
 from packit_service.worker.mixin import PackitAPIWithDownstreamMixin
 from packit_service.worker.reporting import BaseCommitStatus, DuplicateCheckMode
 from packit_service.worker.result import TaskResults
-from ogr.services.forgejo import ForgejoProject
-from ogr.services.github import GithubProject
-from ogr.services.gitlab import GitlabProject
 
 logger = logging.getLogger(__name__)
 
@@ -79,12 +78,12 @@ class CoprBuildHandler(
     task_name = TaskName.copr_build
 
     def __init__(
-            self,
-            package_config: PackageConfig,
-            job_config: JobConfig,
-            event: dict,
-            celery_task: Task,
-            copr_build_group_id: Optional[int] = None,
+        self,
+        package_config: PackageConfig,
+        job_config: JobConfig,
+        event: dict,
+        celery_task: Task,
+        copr_build_group_id: Optional[int] = None,
     ):
         super().__init__(
             package_config=package_config,
@@ -331,11 +330,11 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
 
     def report_successful_build(self):
         if (
-                self.copr_build_helper.job_build
-                and self.copr_build_helper.job_build.trigger == JobConfigTriggerType.pull_request
-                and self.copr_event.pr_id
-                and isinstance(self.project, (GithubProject, GitlabProject, ForgejoProject))
-                and self.job_config.notifications.pull_request.successful_build
+            self.copr_build_helper.job_build
+            and self.copr_build_helper.job_build.trigger == JobConfigTriggerType.pull_request
+            and self.copr_event.pr_id
+            and isinstance(self.project, (GithubProject, GitlabProject, ForgejoProject))
+            and self.job_config.notifications.pull_request.successful_build
         ):
             msg = (
                 f"Congratulations! One of the builds has completed. :champagne:\n\n"
@@ -390,7 +389,7 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
             return TaskResults(success=False, details={"msg": failed_msg})
 
         for build in CoprBuildTargetModel.get_all_by_build_id(
-                str(self.copr_event.build_id),
+            str(self.copr_event.build_id),
         ):
             # from waiting_for_srpm to pending
             build.set_status(BuildStatus.pending)
@@ -425,11 +424,11 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
         logger.debug(f"project type: {type(self.project)}")
 
         if (
-                # Only post fedora-review for pull requests
-                self.copr_build_helper.job_build
-                and self.copr_build_helper.job_build.trigger == JobConfigTriggerType.pull_request
-                and self.copr_event.pr_id
-                and isinstance(self.project, (GithubProject, GitlabProject, ForgejoProject))
+            # Only post fedora-review for pull requests
+            self.copr_build_helper.job_build
+            and self.copr_build_helper.job_build.trigger == JobConfigTriggerType.pull_request
+            and self.copr_event.pr_id
+            and isinstance(self.project, (GithubProject, GitlabProject, ForgejoProject))
         ):
             logger.debug("All conditions met for fedora-review comment")
             review_url = (
@@ -468,18 +467,18 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                         review_content = "No review content available."
 
                 # Start message: minimal and unobtrusive
-                msg = (
-                    f"Fedora review completed for {self.copr_event.pkg} on {self.copr_event.chroot}.\n\n"
-                )
+                msg = f"Fedora review completed for {self.copr_event.pkg} on {self.copr_event.chroot}.\n\n"
 
                 if parsed_json is not None:
                     # Summarize results
                     def summarize_results(data: dict) -> tuple[str, list[dict], dict]:
                         total_pass = total_pending = total_fail = 0
                         failed_items: list[dict] = []
-                        by_severity = {"MUST": {"pass": 0, "pending": 0, "fail": 0},
-                                       "SHOULD": {"pass": 0, "pending": 0, "fail": 0},
-                                       "EXTRA": {"pass": 0, "pending": 0, "fail": 0}}
+                        by_severity = {
+                            "MUST": {"pass": 0, "pending": 0, "fail": 0},
+                            "SHOULD": {"pass": 0, "pending": 0, "fail": 0},
+                            "EXTRA": {"pass": 0, "pending": 0, "fail": 0},
+                        }
 
                         # top-level issues
                         for issue in data.get("issues", []) or []:
@@ -515,18 +514,18 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                                         if severity in by_severity:
                                             by_severity[severity]["fail"] += 1
                                         # enrich with context
-                                        failed_items.append({
-                                            "severity": severity,
-                                            "group": group,
-                                            "name": it.get("name"),
-                                            "text": it.get("text"),
-                                            "note": it.get("note"),
-                                            "url": it.get("url"),
-                                        })
+                                        failed_items.append(
+                                            {
+                                                "severity": severity,
+                                                "group": group,
+                                                "name": it.get("name"),
+                                                "text": it.get("text"),
+                                                "note": it.get("note"),
+                                                "url": it.get("url"),
+                                            }
+                                        )
 
-                        summary_line = (
-                            f"Summary: {total_fail} fail, {total_pending} pending, {total_pass} pass."
-                        )
+                        summary_line = f"Summary: {total_fail} fail, {total_pending} pending, {total_pass} pass."
                         return summary_line, failed_items, by_severity
 
                     summary_line, failed_items, by_severity = summarize_results(parsed_json)
@@ -536,8 +535,9 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                     # Highlight specific common failure if present
                     for fi in failed_items:
                         if fi.get("name") == "CheckNoNameConflict" or (
-                                (fi.get("text") or "").lower().startswith(
-                                    "package does not use a name that already exists")
+                            (fi.get("text") or "")
+                            .lower()
+                            .startswith("package does not use a name that already exists")
                         ):
                             link = fi.get("url") or ""
                             insight = "Name conflict detected (package name already exists)"
@@ -582,8 +582,10 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
 
                     if failed_items:
                         msg += f"**{summary_line}**\n\n"
-                        msg += "<details>\n<summary><strong>Failed checks</strong> (" \
-                               f"{len(failed_items)})</summary>\n\n"
+                        msg += (
+                            "<details>\n<summary><strong>Failed checks</strong> ("
+                            f"{len(failed_items)})</summary>\n\n"
+                        )
                         msg += "\n".join(fail_lines)
                         if len(failed_items) > 10:
                             msg += f"\n\n… and {len(failed_items) - 10} more."
@@ -655,7 +657,9 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                         # Limit verbosity in the comment field
                         max_len = 50000
                         if len(rendered) > max_len:
-                            rendered = rendered[:max_len] + "\n\n[Content truncated due to size limits]"
+                            rendered = (
+                                rendered[:max_len] + "\n\n[Content truncated due to size limits]"
+                            )
                         return rendered
 
                     details_text = render_parsed_details(parsed_json)
@@ -675,7 +679,9 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                             # limit oversized attachment
                             display = text
                             if len(display) > 30000:
-                                display = display[:30000] + "\n\n[Content truncated due to size limits]"
+                                display = (
+                                    display[:30000] + "\n\n[Content truncated due to size limits]"
+                                )
                             msg += "```\n" + display + "\n```\n\n"
                         msg += "</details>\n\n"
                     # Source link
@@ -685,7 +691,10 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                     max_content_length = 50000
                     content_truncated = False
                     if len(review_content) > max_content_length:
-                        display = review_content[:max_content_length] + "\n\n[Content truncated due to size limits]"
+                        display = (
+                            review_content[:max_content_length]
+                            + "\n\n[Content truncated due to size limits]"
+                        )
                         content_truncated = True
                     else:
                         display = review_content
@@ -697,8 +706,6 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                         f"</details>\n\n"
                         f"Review source: [review.txt]({review_url})"
                     )
-
-                
 
                 logger.debug(
                     f"Attempting to post fedora-review comment for build {self.copr_event.build_id}"
@@ -746,14 +753,14 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
 
         for job_config in self.copr_build_helper.job_tests_all:
             if (
-                    # we need to check the labels here
-                    # the same way as when scheduling jobs for event
-                    (
-                            job_config.trigger != JobConfigTriggerType.pull_request
-                            or not (job_config.require.label.present or job_config.require.label.absent)
-                    )
-                    and self.copr_event.chroot
-                    in self.copr_build_helper.build_targets_for_test_job(job_config)
+                # we need to check the labels here
+                # the same way as when scheduling jobs for event
+                (
+                    job_config.trigger != JobConfigTriggerType.pull_request
+                    or not (job_config.require.label.present or job_config.require.label.absent)
+                )
+                and self.copr_event.chroot
+                in self.copr_build_helper.build_targets_for_test_job(job_config)
             ):
                 event_dict["tests_targets_override"] = [
                     (target, job_config.identifier)

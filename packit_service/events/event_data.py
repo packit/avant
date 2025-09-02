@@ -8,6 +8,7 @@ from typing import Optional
 
 from ogr.abstract import GitProject
 from ogr.parsing import RepoUrl
+
 from packit_service.config import ServiceConfig
 from packit_service.models import (
     AbstractProjectObjectDbType,

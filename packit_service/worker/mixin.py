@@ -2,18 +2,17 @@
 # SPDX-License-Identifier: MIT
 
 import logging
-import re
 from abc import abstractmethod
 from pathlib import Path
 from typing import Optional, Protocol, Union
 
 from fasjson_client import Client
 from fasjson_client.errors import APIError
+from ogr.abstract import GitProject, Issue
 from packit.api import PackitAPI
 from packit.local_project import CALCULATE, LocalProject, LocalProjectBuilder
 from packit.utils.repo import RepositoryCache
 
-from ogr.abstract import GitProject, Issue, PullRequest
 from packit_service.config import ServiceConfig
 from packit_service.constants import (
     FASJSON_URL,

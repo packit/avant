@@ -7,6 +7,7 @@ from typing import Optional, Union
 
 from ogr.abstract import GitProject
 from ogr.services.pagure import PagureProject
+
 from packit_service.constants import COPR_SRPM_CHROOT
 from packit_service.models import (
     AbstractProjectObjectDbType,

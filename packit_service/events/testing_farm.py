@@ -6,6 +6,7 @@ from typing import Optional
 
 from ogr.abstract import GitProject
 from ogr.services.pagure import PagureProject
+
 from packit_service.models import (
     AbstractProjectObjectDbType,
     ProjectEventModel,

@@ -5,6 +5,7 @@ from typing import Optional
 
 from ogr.abstract import Comment as OgrComment
 from ogr.abstract import GitProject
+
 from packit_service.service.db_project_events import AddPullRequestEventToDb
 
 from ..abstract.comment import PullRequest as AbstractPRCommentEvent

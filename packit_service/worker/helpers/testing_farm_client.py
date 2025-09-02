@@ -7,10 +7,10 @@ from re import Pattern
 from typing import Any, Callable, Optional
 
 import requests
+from ogr.utils import RequestResponse
 from packit.constants import HTTP_REQUEST_TIMEOUT
 from packit.exceptions import PackitException
 
-from ogr.utils import RequestResponse
 from packit_service.config import ServiceConfig
 from packit_service.constants import (
     CONTACTS_URL,

@@ -12,9 +12,9 @@ from os import getenv
 import jwt
 from flask import request
 from flask_restx import Namespace, Resource, fields
+from ogr.parsing import parse_git_repo
 from prometheus_client import Counter
 
-from ogr.parsing import parse_git_repo
 from packit_service.celerizer import celery_app
 from packit_service.config import ServiceConfig
 from packit_service.constants import CELERY_DEFAULT_MAIN_TASK_NAME, GITLAB_ISSUE
