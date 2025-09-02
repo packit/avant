@@ -24,6 +24,7 @@ from packit_service.events import (
     testing_farm,
 )
 from packit_service.events.enums import (
+    IssueCommentAction,
     PullRequestAction,
     PullRequestCommentAction,
 )
@@ -73,6 +74,7 @@ class Parser:
             testing_farm.Result,
             forgejo.pr.Action,
             forgejo.pr.Comment,
+            forgejo.issue.Comment,
             forgejo.push.Commit,
         ]
     ]:
@@ -99,6 +101,7 @@ class Parser:
                 Parser.parse_copr_event,
                 Parser.parse_forgejo_pr_event,
                 Parser.parse_forgejo_push_event,
+                Parser.parse_forgejo_comment_event,
             )
         ):
             if response:
@@ -210,6 +213,78 @@ class Parser:
             commit_sha_before=event.get("before", ""),  # Optional, might be empty
             actor=actor,
             body=body,
+        )
+
+    @staticmethod
+    def parse_forgejo_comment_event(
+        event: dict,
+    ) -> Optional[Union[forgejo.pr.Comment, forgejo.issue.Comment]]:
+        """Since Forgejo treats PR as special issues the comments are basically on issues,
+        we need to distinguish between Forgejo issue and PR comments and parse accordingly."""
+
+        issue_id = nested_get(event, "issue", "number")
+        action = event.get("action")
+        if action not in {"created", "edited"} or not issue_id:
+            return None
+
+        # Only treat as PR if 'pull_request' is present and not None
+        issue_dict = event.get("issue", {})
+        is_pr = "pull_request" in issue_dict and issue_dict["pull_request"] is not None
+
+        comment = nested_get(event, "comment", "body")
+        comment_id = nested_get(event, "comment", "id")
+        logger.info(
+            f"Forgejo {'PR' if is_pr else 'issue'}#{issue_id} "
+            f"comment: {comment!r} id#{comment_id} {action!r} event."
+        )
+
+        base_repo_namespace = nested_get(event, "issue", "user", "login")
+        base_repo_name = nested_get(event, "repository", "name")
+
+        user_login = nested_get(event, "comment", "user", "login")
+        target_repo_namespace = nested_get(event, "repository", "owner", "login")
+
+        target_repo_name = nested_get(event, "repository", "name")
+        https_url = nested_get(event, "repository", "html_url")
+
+        if not (
+            base_repo_name and base_repo_namespace and target_repo_name and target_repo_namespace
+        ):
+            logger.warning("Missing repo info in Forgejo event.")
+            return None
+
+        if not user_login:
+            logger.warning("No user login in comment.")
+            return None
+
+        if is_pr:
+            return forgejo.pr.Comment(
+                action=PullRequestCommentAction[action],
+                pr_id=issue_id,
+                base_ref="",
+                base_repo_namespace=base_repo_namespace,
+                base_repo_name=base_repo_name,
+                target_repo_namespace=target_repo_namespace,
+                target_repo_name=target_repo_name,
+                project_url=https_url,
+                actor=user_login,
+                comment=comment,
+                comment_id=comment_id,
+                commit_sha=None,
+            )
+        return forgejo.issue.Comment(
+            action=IssueCommentAction[action],
+            issue_id=issue_id,
+            repo_namespace=base_repo_namespace,
+            repo_name=base_repo_name,
+            target_repo=f"{target_repo_namespace}/{target_repo_name}",
+            project_url=https_url,
+            actor=user_login,
+            comment=comment,
+            comment_id=comment_id,
+            tag_name="",
+            base_ref="",
+            dist_git_project_url=None,
         )
 
     @staticmethod
@@ -611,6 +686,7 @@ class Parser:
         "forgejo": {
             "push": parse_forgejo_push_event.__func__,  # type: ignore
             "pull_request": parse_forgejo_pr_event.__func__,  # type: ignore
+            "issue_comment": parse_forgejo_comment_event.__func__,  # type: ignore
         },
         "fedora-messaging": {
             "pagure.pull-request.flag.added": parse_pagure_pr_flag_event.__func__,  # type: ignore

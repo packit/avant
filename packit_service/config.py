@@ -105,13 +105,9 @@ class ServiceConfig(Config):
         command_handler_storage_class: Optional[str] = None,
         appcode: Optional[str] = None,
         enabled_projects_for_fedora_ci: Optional[Union[set[str], list[str]]] = None,
-        forgejo_instance_url: Optional[str] = None,
-        forgejo_api_key: Optional[str] = None,
-        forgejo_namespace: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
-
         self.deployment = deployment
         self.webhook_secret = webhook_secret
         # Common secret to authenticate both, packit service (when sending request to testing farm)
@@ -181,9 +177,6 @@ class ServiceConfig(Config):
 
         # Appcode used in MP+ to differentiate applications
         self.appcode = appcode
-        self.forgejo_instance_url = forgejo_instance_url
-        self.forgejo_api_key = forgejo_api_key
-        self.forgejo_namespace = forgejo_namespace
 
     service_config = None
 
@@ -215,8 +208,6 @@ class ServiceConfig(Config):
             f"redhat_api_refresh_token='{hide(self.redhat_api_refresh_token)}', "
             f"package_config_path_override='{self.package_config_path_override}', "
             f"enabled_projects_for_fedora_ci='{self.enabled_projects_for_fedora_ci}')"
-            f"forgejo_instance_url='{self.forgejo_instance_url}', "
-            f"forgejo_api_key='{hide(self.forgejo_api_key)}', "
         )
 
     @classmethod
