@@ -415,7 +415,7 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
         Handle fedora-review by fetching the review content and posting it as a formatted comment.
 
         The URL follows the pattern:
-        https://download.copr.fedorainfracloud.org/results/{owner}/{project}/{chroot}/{build_id:08d}-{pkg}/fedora-review/review.txt
+        https://download.copr.fedorainfracloud.org/results/{owner}/{project}/{chroot}/{build_id:08d}-{pkg}/fedora-review/review.json
         """
         trigger = (
             self.copr_build_helper.job_build.trigger if self.copr_build_helper.job_build else None
@@ -432,7 +432,6 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                 and isinstance(self.project, (GithubProject, GitlabProject, ForgejoProject))
         ):
             logger.debug("All conditions met for fedora-review comment")
-            # Construct the fedora-review URL based on the pattern
             review_url = (
                 f"https://download.copr.fedorainfracloud.org/results/"
                 f"{self.copr_event.owner}/{self.copr_event.project_name}/"
@@ -441,9 +440,9 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                 f"fedora-review/review.json"
             )
             # we fetch the json file and parse it in a neat manner to post.
+            # we fetch the json file and parse it in a neat manner to post
             try:
                 logger.debug(f"Fetching fedora-review content from: {review_url}")
-                # Fetch the review content
                 response = requests.get(review_url, timeout=HTTP_REQUEST_TIMEOUT)
                 response.raise_for_status()
 
@@ -699,44 +698,7 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                         f"Review source: [review.txt]({review_url})"
                     )
 
-                # Create COPR repository installation instructions
-                copr_instructions = (
-                    f"## COPR Repository Setup\n\n"
-                    f"To test the built packages, enable the COPR repository:\n\n"
-                    f"```bash\n"
-                    f"# Install dnf-plugins-core if not already installed\n"
-                    f"sudo dnf install -y dnf-plugins-core\n\n"
-                    f"# Enable the COPR repository\n"
-                    f"dnf copr enable {self.copr_event.owner}/{self.copr_event.project_name}\n\n"
-                    f"# Install the package\n"
-                    f"sudo dnf install {self.copr_event.pkg}\n"
-                    f"```\n\n"
-                    f"**Note:** These RPMs should only be used in a testing environment.\n\n"
-                )
-
-                # Add truncation notice if content was truncated
-                truncation_notice = ""
-                if content_truncated:
-                    truncation_notice = (
-                        "\n\n**Note:** Review content has been truncated due to size limits. "
-                        "View the complete report using the link below.\n"
-                    )
-
-                # Format the main message
-                msg = (
-                    f"## Fedora Package Review Report\n\n"
-                    f"Automated fedora-review has completed for the "
-                    f"**{self.copr_event.chroot}** build of **{self.copr_event.pkg}**.\n\n"
-                    f"{copr_instructions}"
-                    f"<details>\n"
-                    f"<summary><strong>View Complete Review Report</strong></summary>\n\n"
-                    f"```\n"
-                    f"{review_content}\n"
-                    f"```\n"
-                    f"{truncation_notice}"
-                    f"</details>\n\n"
-                    f"**Review Report Source:** [review.txt]({review_url})"
-                )
+                
 
                 logger.debug(
                     f"Attempting to post fedora-review comment for build {self.copr_event.build_id}"
@@ -757,7 +719,7 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                     f"## Fedora Package Review Report\n\n"
                     f"Automated fedora-review has completed for the "
                     f"**{self.copr_event.chroot}** build of **{self.copr_event.pkg}**.\n\n"
-                    f"**Review Report:** [review.txt]({review_url})\n\n"
+                    f"**Review Report:** [review.json]({review_url})\n\n"
                     f"The review content could not be fetched automatically. "
                     f"Please check the link above for the complete report."
                 )
