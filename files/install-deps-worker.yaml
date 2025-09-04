@@ -61,17 +61,17 @@
     - name: Check if all pip packages have all dependencies installed
       command: pip check
 
+    - name: Install custom python3-ogr package from local RPM
+      ansible.builtin.dnf:
+        name: /src/files/python3-ogr.rpm
+        state: present
+        disable_gpg_check: true
     - name: Install specfile and packit from copr
       ansible.builtin.dnf:
         name:
           - python3-specfile
           - packit
         state: latest
-    - name: Install custom python3-ogr package from local RPM
-      ansible.builtin.dnf:
-        name: /src/files/python3-ogr.rpm
-        state: present
-        disable_gpg_check: true
     - name: Install OpenScanHub client from Copr
       ansible.builtin.dnf:
         name: osh-client

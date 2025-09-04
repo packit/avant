@@ -5,7 +5,6 @@ import logging
 from typing import Optional
 
 from ogr.abstract import CommitStatus
-
 from packit_service.constants import CONTACTS_URL
 from packit_service.worker.reporting.enums import BaseCommitStatus
 

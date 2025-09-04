@@ -12,7 +12,6 @@ from typing import Optional, Union
 
 from ogr.abstract import Comment
 from ogr.abstract import Issue as OgrIssue
-
 from packit_service.models import (
     BuildStatus,
     GitBranchModel,

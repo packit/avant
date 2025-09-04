@@ -5,9 +5,9 @@ import logging
 from collections.abc import Iterable
 from typing import Optional, Union
 
-from ogr.abstract import GitProject, Issue, PullRequest
 from packit.config import JobConfig
 
+from ogr.abstract import GitProject, Issue, PullRequest
 from packit_service.config import ServiceConfig
 from packit_service.worker.reporting.enums import DuplicateCheckMode
 
@@ -29,8 +29,7 @@ def create_issue_if_needed(
         if title in issue.title:
             logger.debug(f"Title of issue {issue.id} matches.")
             if comment_to_existing:
-                comment_without_duplicating(
-                    body=comment_to_existing, pr_or_issue=issue)
+                comment_without_duplicating(body=comment_to_existing, pr_or_issue=issue)
                 logger.debug(f"Issue #{issue.id} updated: {issue.url}")
             return None
 
