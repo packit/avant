@@ -18,8 +18,8 @@ from packit_service.worker.handlers.copr import (
     CoprBuildHandler,
     CoprBuildStartHandler,
 )
+from packit_service.worker.handlers.submit import SubmitPackageHandler
 from packit_service.worker.handlers.testing_farm import (
-    DownstreamTestingFarmResultsHandler,
     TestingFarmHandler,
     TestingFarmResultsHandler,
 )
@@ -30,7 +30,7 @@ __all__ = [
     CoprBuildHandler.__name__,
     CoprBuildEndHandler.__name__,
     CoprBuildStartHandler.__name__,
-    DownstreamTestingFarmResultsHandler.__name__,
     TestingFarmHandler.__name__,
     TestingFarmResultsHandler.__name__,
+    SubmitPackageHandler.__name__,
 ]

@@ -1,8 +1,10 @@
+# Copyright Contributors to the Packit project.
+# SPDX-License-Identifier: MIT
+
 from typing import Optional
 
 from ogr.abstract import Comment as OgrComment
 from ogr.abstract import GitProject
-
 from packit_service.service.db_project_events import AddPullRequestEventToDb
 
 from ..abstract.comment import PullRequest as AbstractPRCommentEvent
@@ -98,18 +100,21 @@ class Comment(AbstractPRCommentEvent, ForgejoEvent):
         return "forgejo.pr.Comment"
 
     def get_dict(self, default_dict: Optional[dict] = None) -> dict:
-        """
-        Override get_dict to avoid accessing properties that make API calls.
-        Use private attributes directly, similar to forgejo/issue.py.
-        """
-        from ..abstract.comment import CommentEvent
-
-        result = CommentEvent.get_dict(self, default_dict=default_dict)
-        result.pop("_comment_object")
-        result["action"] = self.action.value
-        result["pr_id"] = self._pr_id
-        result["commit_sha"] = self._commit_sha
+        result = super().get_dict()
+        result["action"] = self.action
         return result
+
+    def get_non_serializable_attributes(self):
+        """
+        Ensure we exclude any attributes that might contain non-serializable objects
+        like database connections or HTTP clients with threading locks.
+        """
+        return [
+            *super().get_non_serializable_attributes(),
+            "_comment_object",  # OGR Comment object with HTTP clients
+            "_pull_request",  # Database model
+            "_event",  # Database model
+        ]
 
     def get_base_project(self) -> GitProject:
         return self.project.service.get_project(

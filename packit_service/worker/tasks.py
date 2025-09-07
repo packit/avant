@@ -49,6 +49,7 @@ from packit_service.worker.handlers import (
     CoprBuildEndHandler,
     CoprBuildHandler,
     CoprBuildStartHandler,
+    SubmitPackageHandler,
     TestingFarmHandler,
     TestingFarmResultsHandler,
 )
@@ -188,6 +189,16 @@ def babysit_copr_build(self, build_id: int):
         raise PackitCoprBuildTimeoutException(
             f"No feedback for copr build id={build_id} yet",
         )
+
+
+@celery_app.task(name=TaskName.submit_package, base=TaskWithRetry)
+def run_submit_package_handler(event: dict, package_config: dict, job_config: dict):
+    handler = SubmitPackageHandler(
+        package_config=load_package_config(package_config),
+        job_config=load_job_config(job_config),
+        event=event,
+    )
+    return get_handlers_task_results(handler.run_job(), event)
 
 
 # tasks for running the handlers
@@ -365,4 +376,3 @@ def get_usage_statistics() -> None:
         logger.debug(f"Getting usage data from datetime_from {day}.")
         get_usage_data(datetime_from=day)
         logger.debug("Got usage data.")
-

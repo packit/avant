@@ -1,3 +1,6 @@
+# Copyright Contributors to the Packit project.
+# SPDX-License-Identifier: MIT
+
 import logging
 from typing import Optional
 
@@ -56,4 +59,6 @@ class StatusReporterForgejo(StatusReporter):
         try:
             self.pull_request_object.comment(body=body)
         except NotImplementedError as e:
-            logger.debug(f"Forgejo get_comments not implemented, falling back to simple comment: {e}")
+            logger.debug(
+                f"Forgejo get_comments not implemented, falling back to simple comment: {e}"
+            )

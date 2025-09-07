@@ -51,7 +51,7 @@ class CommentEvent(ForgeIndependent):
 
     def get_dict(self, default_dict: Optional[dict] = None) -> dict:
         result = super().get_dict()
-        result.pop("_comment_object")
+        result.pop("_comment_object", None)  # Safe pop in case it was already excluded
         return result
 
 

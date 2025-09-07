@@ -6,16 +6,16 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
+import requests
 from celery import Task, signature
 from packit.config import (
     JobConfig,
     JobConfigTriggerType,
     JobType,
 )
-from packit.config.common_package_config import CommonPackageConfig
 from packit.config.package_config import PackageConfig
+from packit.constants import HTTP_REQUEST_TIMEOUT
 
-from ogr.abstract import GitProject
 from ogr.services.forgejo import ForgejoProject
 from ogr.services.github import GithubProject
 from ogr.services.gitlab import GitlabProject
@@ -49,7 +49,6 @@ from packit_service.worker.handlers.abstract import (
     TaskName,
     configured_as,
     reacts_to,
-    run_for_check_rerun,
     run_for_comment,
 )
 from packit_service.worker.handlers.mixin import (
@@ -417,16 +416,17 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
 
     def handle_fedora_review(self):
         """
-        Handle fedora-review by constructing the review URL and posting it as a comment.
+        Handle fedora-review by fetching the review content and posting it as a formatted comment.
 
         The URL follows the pattern:
         https://download.copr.fedorainfracloud.org/results/{owner}/{project}/{chroot}/{build_id:08d}-{pkg}/fedora-review/review.txt
         """
         logger.debug(f"handle_fedora_review called for build {self.copr_event.build_id}")
         logger.debug(f"job_build: {self.copr_build_helper.job_build}")
-        logger.debug(
-            f"trigger: {self.copr_build_helper.job_build.trigger if self.copr_build_helper.job_build else None}"
+        trigger = (
+            self.copr_build_helper.job_build.trigger if self.copr_build_helper.job_build else None
         )
+        logger.debug(f"trigger: {trigger}")
         logger.debug(f"pr_id: {self.copr_event.pr_id}")
         logger.debug(f"project type: {type(self.project)}")
 
@@ -447,28 +447,113 @@ class CoprBuildEndHandler(AbstractCoprBuildReportHandler):
                 f"fedora-review/review.txt"
             )
 
-            msg = (
-                f"📋 **Fedora Review Results Available**\n\n"
-                f"The fedora-review has completed for the {self.copr_event.chroot} build.\n\n"
-                f"**Review Report:** [review.txt]({review_url})\n\n"
-                f"This report contains automated package review checks and recommendations. "
-                f"Please review the results for any potential issues or improvements."
-            )
-
             try:
+                logger.debug(f"Fetching fedora-review content from: {review_url}")
+                # Fetch the review content
+                response = requests.get(review_url, timeout=HTTP_REQUEST_TIMEOUT)
+                response.raise_for_status()
+
+                # Check content type to ensure it's text
+                content_type = response.headers.get("content-type", "").lower()
+                if "text" not in content_type and "application/octet-stream" not in content_type:
+                    logger.warning(f"Unexpected content type '{content_type}' for review file")
+
+                # Get content and ensure it's valid text
+                try:
+                    review_content = response.text.strip()
+                except UnicodeDecodeError as e:
+                    logger.warning(f"Failed to decode review content as text: {e}")
+                    raise requests.RequestException(f"Invalid text content: {e}") from e
+
+                # Handle empty or invalid content
+                if not review_content:
+                    logger.warning(f"Empty review content fetched from {review_url}")
+                    review_content = "No review content available."
+
+                # Limit content size to prevent comment size issues (max ~50KB)
+                max_content_length = 50000
+                content_truncated = False
+                if len(review_content) > max_content_length:
+                    review_content = (
+                        review_content[:max_content_length]
+                        + "\n\n[Content truncated due to size limits]"
+                    )
+                    content_truncated = True
+                    logger.debug(
+                        f"Review content truncated from {len(response.text)} to "
+                        f"{len(review_content)} characters"
+                    )
+
+                # Create COPR repository installation instructions
+                copr_instructions = (
+                    f"## COPR Repository Setup\n\n"
+                    f"To test the built packages, enable the COPR repository:\n\n"
+                    f"```bash\n"
+                    f"# Install dnf-plugins-core if not already installed\n"
+                    f"sudo dnf install -y dnf-plugins-core\n\n"
+                    f"# Enable the COPR repository\n"
+                    f"dnf copr enable {self.copr_event.owner}/{self.copr_event.project_name}\n\n"
+                    f"# Install the package\n"
+                    f"sudo dnf install {self.copr_event.pkg}\n"
+                    f"```\n\n"
+                    f"**Note:** These RPMs should only be used in a testing environment.\n\n"
+                )
+
+                # Add truncation notice if content was truncated
+                truncation_notice = ""
+                if content_truncated:
+                    truncation_notice = (
+                        "\n\n**Note:** Review content has been truncated due to size limits. "
+                        "View the complete report using the link below.\n"
+                    )
+
+                # Format the main message
+                msg = (
+                    f"## Fedora Package Review Report\n\n"
+                    f"Automated fedora-review has completed for the "
+                    f"**{self.copr_event.chroot}** build of **{self.copr_event.pkg}**.\n\n"
+                    f"{copr_instructions}"
+                    f"<details>\n"
+                    f"<summary><strong>View Complete Review Report</strong></summary>\n\n"
+                    f"```\n"
+                    f"{review_content}\n"
+                    f"```\n"
+                    f"{truncation_notice}"
+                    f"</details>\n\n"
+                    f"**Review Report Source:** [review.txt]({review_url})"
+                )
+
                 logger.debug(
                     f"Attempting to post fedora-review comment for build {self.copr_event.build_id}"
                 )
-                logger.debug(f"Review URL: {review_url}")
-                logger.debug(f"Comment message: {msg}")
                 result = self.copr_build_helper.status_reporter.comment(
                     msg,
                     duplicate_check=DuplicateCheckMode.check_last_comment,
                 )
                 logger.debug(f"Comment method returned: {result}")
                 logger.debug(
-                    f"Successfully posted fedora-review comment for build {self.copr_event.build_id}"
+                    f"Successfully posted fedora-review comment for build "
+                    f"{self.copr_event.build_id}"
                 )
+            except requests.RequestException as e:
+                logger.warning(f"Failed to fetch fedora-review content from {review_url}: {e}")
+                # Fall back to posting just the link
+                fallback_msg = (
+                    f"## Fedora Package Review Report\n\n"
+                    f"Automated fedora-review has completed for the "
+                    f"**{self.copr_event.chroot}** build of **{self.copr_event.pkg}**.\n\n"
+                    f"**Review Report:** [review.txt]({review_url})\n\n"
+                    f"The review content could not be fetched automatically. "
+                    f"Please check the link above for the complete report."
+                )
+                try:
+                    self.copr_build_helper.status_reporter.comment(
+                        fallback_msg,
+                        duplicate_check=DuplicateCheckMode.check_last_comment,
+                    )
+                    logger.debug("Posted fallback fedora-review comment")
+                except Exception as fallback_e:
+                    logger.warning(f"Failed to post fallback fedora-review comment: {fallback_e}")
             except Exception as e:
                 logger.warning(f"Failed to post fedora-review comment: {e}")
                 logger.exception("Full traceback for fedora-review comment failure")

@@ -11,9 +11,9 @@ from datetime import datetime, timezone
 from logging import getLogger
 from typing import Optional, Union
 
-from ogr.abstract import GitProject
 from packit.config import JobConfigTriggerType, PackageConfig
 
+from ogr.abstract import GitProject
 from packit_service.models import (
     AbstractProjectObjectDbType,
     AnityaProjectModel,
@@ -93,6 +93,8 @@ class Event(ABC):
         This method will copy everything from dict except the specified
         non serializable keys.
         """
+        logger.debug(f"Making serializable: {d.items()}")
+        logger.debug(f"Skipping attributes: {skip}")
         return {k: copy.deepcopy(v) for k, v in d.items() if k not in skip}
 
     def store_packages_config(self):
@@ -129,7 +131,9 @@ class Event(ABC):
     def get_dict(self, default_dict: Optional[dict] = None) -> dict:
         d = default_dict or self.__dict__
         # whole dict has to be JSON serializable because of redis
-        d = self.make_serializable(d, self.get_non_serializable_attributes())
+        skip_attrs = self.get_non_serializable_attributes()
+        logger.debug(f"Event class: {self.__class__.__name__}, Skip attrs: {skip_attrs}")
+        d = self.make_serializable(d, skip_attrs)
         d["event_type"] = self.event_type()
 
         # we are trying to be lazy => don't touch database if it is not needed
