@@ -9,6 +9,11 @@ from typing import Optional, Union
 
 from copr.v3 import CoprAuthException, CoprRequestException
 from copr.v3.exceptions import CoprTimeoutException
+from ogr.abstract import GitProject
+from ogr.exceptions import GitForgeInternalError, OgrNetworkError
+from ogr.parsing import parse_git_repo
+from ogr.services.github import GithubProject
+from ogr.services.gitlab import GitlabProject
 from packit.config import JobConfig, JobConfigTriggerType, JobType
 from packit.config.aliases import get_aliases
 from packit.config.common_package_config import Deployment, MockBootstrapSetup
@@ -19,11 +24,6 @@ from packit.exceptions import (
     PackitCoprSettingsException,
 )
 
-from ogr.abstract import GitProject
-from ogr.exceptions import GitForgeInternalError, OgrNetworkError
-from ogr.parsing import parse_git_repo
-from ogr.services.github import GithubProject
-from ogr.services.gitlab import GitlabProject
 from packit_service import sentry_integration
 from packit_service.celerizer import celery_app
 from packit_service.config import ServiceConfig

@@ -1,22 +1,23 @@
 # Avant
 
 Service to make onboarding packages to Fedora easier.
-Development is currently taking place in the `service` branch.
+Development is currently taking place in the `service` and `working` branches.
 
 ## Workflow
 
 ##### Must have:
 
-* [x] Forgejo integration (create projects and react to push events)
-* [x] COPR builds
-* [x] Run `packit` / `tmt` plans with Testing Farm on new packages
-* [x] Reruns
-* [x] Status reporting
-* [x] Commit status
+- [x] Forgejo integration (create projects and react to push events)
+- [x] COPR builds
+- [x] Run `packit` / `tmt` plans with Testing Farm on new packages
+- [x] Reruns
+- [x] Status reporting
+- [x] Commit status
 
 #### Testing
-* [ ] ~~Unit tests~~ (see [packit/validation](https://github.com/packit/validation))
-* [ ] OGR and Packit Service event tests
+
+- [ ] ~~Unit tests~~ (see [packit/validation](https://github.com/packit/validation))
+- [ ] OGR and Packit Service event tests
 
 ## Running locally
 
@@ -53,4 +54,3 @@ docker compose build
 ```bash
 docker compose up
 ```
-

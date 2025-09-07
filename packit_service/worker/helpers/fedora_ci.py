@@ -4,6 +4,7 @@
 import logging
 
 from ogr.abstract import GitProject
+
 from packit_service.events.event_data import EventData
 from packit_service.worker.reporting import BaseCommitStatus
 from packit_service.worker.reporting.reporters.base import StatusReporter

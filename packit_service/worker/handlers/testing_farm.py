@@ -49,8 +49,6 @@ from packit_service.worker.handlers.abstract import (
     TaskName,
     configured_as,
     reacts_to,
-    run_for_check_rerun,
-    run_for_comment,
 )
 from packit_service.worker.handlers.mixin import (
     GetCoprBuildMixin,
@@ -66,11 +64,6 @@ from packit_service.worker.result import TaskResults
 logger = logging.getLogger(__name__)
 
 
-@run_for_comment(command="test")
-@run_for_comment(command="build")
-@run_for_comment(command="copr-build")
-@run_for_comment(command="retest-failed")
-@run_for_check_rerun(prefix="testing-farm")
 @reacts_to(forgejo.pr.Action)
 @reacts_to(forgejo.pr.Comment)
 @reacts_to(abstract.comment.Commit)

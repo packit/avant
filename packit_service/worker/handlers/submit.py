@@ -13,6 +13,7 @@ from packit_service.worker.mixin import ConfigFromEventMixin, PackitAPIWithDowns
 from packit_service.worker.result import TaskResults
 
 
+# Placeholder handler for package sync to dist git, checks if the actor is maintainer or not.
 @run_for_comment_as_fedora_ci(command="sync-package")
 @reacts_to_as_fedora_ci(event=forgejo.pr.Comment)
 class SubmitPackageHandler(FedoraCIJobHandler, PackitAPIWithDownstreamMixin, ConfigFromEventMixin):

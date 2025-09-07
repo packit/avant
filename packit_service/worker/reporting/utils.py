@@ -5,9 +5,9 @@ import logging
 from collections.abc import Iterable
 from typing import Optional, Union
 
+from ogr.abstract import GitProject, Issue, PullRequest
 from packit.config import JobConfig
 
-from ogr.abstract import GitProject, Issue, PullRequest
 from packit_service.config import ServiceConfig
 from packit_service.worker.reporting.enums import DuplicateCheckMode
 
