@@ -10,12 +10,12 @@ from typing import ClassVar, Optional
 from celery import Task
 from celery._state import get_current_task
 from celery.signals import after_setup_logger
-from ogr import __version__ as ogr_version
 from packit import __version__ as packit_version
 from packit.exceptions import PackitException
 from sqlalchemy import __version__ as sqlal_version
 from syslog_rfc5424_formatter import RFC5424Formatter
 
+from ogr import __version__ as ogr_version
 from packit_service import __version__ as ps_version
 from packit_service.celerizer import celery_app
 from packit_service.constants import (
@@ -33,7 +33,6 @@ from packit_service.constants import (
 from packit_service.models import (
     GitProjectModel,
     SyncReleaseTargetModel,
-    VMImageBuildTargetModel,
     get_usage_data,
 )
 from packit_service.utils import (
@@ -50,47 +49,15 @@ from packit_service.worker.handlers import (
     CoprBuildEndHandler,
     CoprBuildHandler,
     CoprBuildStartHandler,
-    CoprOpenScanHubTaskFinishedHandler,
-    CoprOpenScanHubTaskStartedHandler,
-    DownstreamTestingFarmHandler,
-    DownstreamTestingFarmResultsHandler,
-    GithubAppInstallationHandler,
-    KojiBuildHandler,
-    KojiTaskReportHandler,
-    ProposeDownstreamHandler,
-    SyncFromDownstream,
     TestingFarmHandler,
     TestingFarmResultsHandler,
-    VMImageBuildHandler,
-    VMImageBuildResultHandler,
 )
 from packit_service.worker.handlers.abstract import TaskName
-from packit_service.worker.handlers.bodhi import (
-    BodhiUpdateFromSidetagHandler,
-    CreateBodhiUpdateHandler,
-    IssueCommentRetriggerBodhiUpdateHandler,
-    RetriggerBodhiUpdateHandler,
-)
-from packit_service.worker.handlers.distgit import (
-    DownstreamKojiBuildHandler,
-    DownstreamKojiScratchBuildHandler,
-    PullFromUpstreamHandler,
-    RetriggerDownstreamKojiBuildHandler,
-    TagIntoSidetagHandler,
-)
-from packit_service.worker.handlers.forges import GithubFasVerificationHandler
-from packit_service.worker.handlers.koji import (
-    KojiBuildReportHandler,
-    KojiBuildTagHandler,
-    KojiTaskReportDownstreamHandler,
-)
 from packit_service.worker.handlers.usage import check_onboarded_projects
 from packit_service.worker.helpers.build.babysit import (
     check_copr_build,
     check_pending_copr_builds,
     check_pending_testing_farm_runs,
-    check_pending_vm_image_builds,
-    update_vm_image_build,
 )
 from packit_service.worker.jobs import SteveJobs
 from packit_service.worker.result import TaskResults
@@ -100,10 +67,6 @@ logger = logging.getLogger(__name__)
 
 class PackitCoprBuildTimeoutException(PackitException):
     """Copr build has timed out"""
-
-
-class PackitVMImageBuildTimeoutException(PackitException):
-    """VM image build has timed out"""
 
 
 @after_setup_logger.connect
@@ -266,16 +229,6 @@ def run_copr_build_handler(
     return get_handlers_task_results(handler.run_job(), event)
 
 
-@celery_app.task(name=TaskName.installation, base=TaskWithRetry)
-def run_installation_handler(event: dict, package_config: dict, job_config: dict):
-    handler = GithubAppInstallationHandler(
-        package_config=None,
-        job_config=None,
-        event=event,
-    )
-    return get_handlers_task_results(handler.run_job(), event)
-
-
 @celery_app.task(bind=True, name=TaskName.testing_farm, base=TaskWithRetry)
 def run_testing_farm_handler(
     self,
@@ -310,78 +263,6 @@ def run_testing_farm_results_handler(
     return get_handlers_task_results(handler.run_job(), event)
 
 
-@celery_app.task(
-    bind=True,
-    name=TaskName.pull_from_upstream,
-    base=TaskWithRetry,
-    queue="long-running",
-)
-def run_pull_from_upstream_handler(
-    self,
-    event: dict,
-    package_config: dict,
-    job_config: dict,
-    sync_release_run_id: Optional[int] = None,
-):
-    handler = PullFromUpstreamHandler(
-        package_config=load_package_config(package_config),
-        job_config=load_job_config(job_config),
-        event=event,
-        sync_release_run_id=sync_release_run_id,
-        celery_task=self,
-    )
-    return get_handlers_task_results(handler.run_job(), event)
-
-
-@celery_app.task(
-    bind=True,
-    name=TaskName.vm_image_build,
-    base=TaskWithRetry,
-    queue="short-running",
-)
-def run_vm_image_build(self, event: dict, package_config: dict, job_config: dict):
-    handler = VMImageBuildHandler(
-        package_config=load_package_config(package_config),
-        job_config=load_job_config(job_config),
-        event=event,
-        celery_task=self,
-    )
-    return get_handlers_task_results(handler.run_job(), event)
-
-
-@celery_app.task(name=TaskName.vm_image_build_result, base=TaskWithRetry)
-def run_vm_image_build_result(
-    self,
-    event: dict,
-    package_config: dict,
-    job_config: dict,
-):
-    handler = VMImageBuildResultHandler(
-        package_config=load_package_config(package_config),
-        job_config=load_job_config(job_config),
-        event=event,
-    )
-    return get_handlers_task_results(handler.run_job(), event)
-
-
-@celery_app.task(
-    bind=True,
-    name="task.babysit_vm_image_build",
-    autoretry_for=(PackitVMImageBuildTimeoutException,),
-    retry_backoff=30,  # retry again in 30s, 60s, 120s, 240s...
-    retry_backoff_max=3600,  # at most, wait for an hour between retries
-    max_retries=14,  # retry 14 times; with the backoff values above this is ~8 hours
-    retry_jitter=False,  # do not jitter, as it might considerably reduce the total wait time
-)
-def babysit_vm_image_build(self, build_id: int):
-    """check status of a vm image build and update it in DB"""
-    model = VMImageBuildTargetModel.get_by_build_id(build_id)
-    if not update_vm_image_build(build_id, model):
-        raise PackitVMImageBuildTimeoutException(
-            f"No feedback for vm image build id={build_id} yet",
-        )
-
-
 def get_handlers_task_results(results: dict, event: dict) -> dict:
     # include original event to provide more info
     return {"job": results, "event": event}
@@ -405,11 +286,6 @@ def database_maintenance() -> None:
     discard_old_srpm_build_logs()
     discard_old_package_configs()
     backup()
-
-
-@celery_app.task
-def babysit_pending_vm_image_builds() -> None:
-    check_pending_vm_image_builds()
 
 
 # Usage / statistics tasks
@@ -489,3 +365,4 @@ def get_usage_statistics() -> None:
         logger.debug(f"Getting usage data from datetime_from {day}.")
         get_usage_data(datetime_from=day)
         logger.debug("Got usage data.")
+

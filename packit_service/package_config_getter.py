@@ -4,17 +4,20 @@
 import logging
 from typing import Optional
 
-from ogr.abstract import GitProject
 from packit.config import (
+    CommonPackageConfig,
+    JobConfig,
+    JobConfigTriggerType,
+    JobType,
     PackageConfig,
-    get_package_config_from_repo,
 )
 from packit.exceptions import (
     PackitConfigException,
     PackitMissingConfigException,
 )
+from specfile.specfile import Specfile
 
-from packit_service.config import ServiceConfig
+from ogr.abstract import GitProject
 from packit_service.constants import (
     CONTACTS_URL,
     DOCS_HOW_TO_CONFIGURE_URL,
@@ -42,44 +45,56 @@ class PackageConfigGetter:
         if not base_project and not project:
             return None
 
-        project_to_search_in = base_project or project
         try:
-            package_config: PackageConfig = get_package_config_from_repo(
-                project=project_to_search_in,
-                ref=reference,
-                package_config_path=ServiceConfig.get_service_config().package_config_path_override,
-            )
-            if not package_config and fail_when_missing:
-                raise PackitMissingConfigException(
-                    f"No config file for packit (e.g. `.packit.yaml`) found in "
-                    f"{project_to_search_in.full_repo_name} on commit {reference}",
+            pull_request = project.get_pr(pr_id)
+            source_project = pull_request.source_project
+            spec_files = list(source_project.get_files(ref=reference, filter_regex=".spec"))
+            if not spec_files:
+                raise Exception(
+                    f"No spec files found in {source_project.full_repo_name} on commit {reference}",
                 )
+            packages = {}
+            for spec_file in spec_files:
+                spec_path = spec_file
+                logger.debug(
+                    f"Found spec file: {spec_path} in {source_project.full_repo_name} on commit {reference}"
+                )
+                spec_content = source_project.get_file_content(
+                    path=spec_path,
+                    ref=reference,
+                )
+                specfile = Specfile(content=spec_content, sourcedir="/tmp/sources")
+                if not specfile:
+                    raise PackitConfigException(
+                        f"Failed to parse spec file {spec_path} in {source_project.full_repo_name} on commit {reference}",
+                    )
+
+                packages[specfile.name] = CommonPackageConfig(specfile_path=spec_path, _targets=["fedora-rawhide-x86_64"])
+
+            package_config = PackageConfig(
+                packages=packages,
+                jobs=[
+                    JobConfig(
+                        type=JobType.copr_build,
+                        trigger=JobConfigTriggerType.pull_request,
+                        packages=packages,
+                    ),
+                    JobConfig(
+                        type=JobType.tests,
+                        trigger=JobConfigTriggerType.pull_request,
+                        packages=packages,
+                    ),
+                ],
+            )
         except PackitConfigException as ex:
             message = (
                 f"{ex}\n\n"
                 if isinstance(ex, PackitMissingConfigException)
-                else f"Failed to load packit config file:\n```\n{ex}\n```\n"
-            )
-
-            message += (
-                "For more info, please check out "
-                f"[the documentation]({DOCS_HOW_TO_CONFIGURE_URL}) "
-                "or [contact the Packit team]"
-                f"({CONTACTS_URL}). You can also use "
-                f"our CLI command [`config validate`]({DOCS_VALIDATE_CONFIG}) or our "
-                f"[pre-commit hooks]({DOCS_VALIDATE_HOOKS}) for validation of the configuration."
+                else f"No spec files found:\n```\n{ex}\n```\n"
             )
 
             if pr_id:
                 comment_without_duplicating(body=message, pr_or_issue=project.get_pr(pr_id))
-            elif created_issue := create_issue_if_needed(
-                project,
-                title="Invalid config",
-                message=message,
-            ):
-                logger.debug(
-                    f"Created issue for invalid packit config: {created_issue.url}",
-                )
             raise ex
 
         return package_config

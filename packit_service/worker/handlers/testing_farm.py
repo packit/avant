@@ -41,13 +41,11 @@ from packit_service.service.urls import (
 )
 from packit_service.utils import elapsed_seconds
 from packit_service.worker.checker.abstract import Checker
-from packit_service.worker.checker.distgit import PermissionOnDistgitForFedoraCI
 from packit_service.worker.checker.testing_farm import (
     CanActorRunJob,
     IsCoprBuildDefined,
     IsEventForJob,
     IsEventOk,
-    IsEventOkForFedoraCI,
     IsIdentifierFromCommentMatching,
     IsJobConfigTriggerMatching,
     IsLabelFromCommentMatching,
@@ -62,7 +60,6 @@ from packit_service.worker.handlers.abstract import (
     reacts_to_as_fedora_ci,
     run_for_check_rerun,
     run_for_comment,
-    run_for_comment_as_fedora_ci,
 )
 from packit_service.worker.handlers.mixin import (
     GetCoprBuildMixin,
@@ -345,142 +342,6 @@ class TestingFarmHandler(
             return TaskResults(success=True, details={})
 
         result_details = {"msg": f"Failed testing farm targets: '{failed.keys()}'."}
-        result_details.update(failed)
-
-        return TaskResults(success=False, details=result_details)
-
-
-@run_for_comment_as_fedora_ci(command="test")
-@reacts_to_as_fedora_ci(event=koji.result.Task)
-@reacts_to_as_fedora_ci(event=pagure.pr.Comment)
-class DownstreamTestingFarmHandler(
-    RetriableJobHandler,
-    FedoraCIJobHandler,
-    PackitAPIWithDownstreamMixin,
-    GetDownstreamTestingFarmJobHelperMixin,
-):
-    __test__ = False
-    task_name = TaskName.downstream_testing_farm
-
-    def __init__(
-        self,
-        package_config: PackageConfig,
-        job_config: JobConfig,
-        event: dict,
-        celery_task: Task,
-        testing_farm_target_id: Optional[int] = None,
-    ):
-        super().__init__(
-            package_config=package_config,
-            job_config=job_config,
-            event=event,
-            celery_task=celery_task,
-        )
-        self._testing_farm_target_id = testing_farm_target_id
-
-    @staticmethod
-    def get_checkers() -> tuple[type[Checker], ...]:
-        return (
-            IsEventOkForFedoraCI,
-            PermissionOnDistgitForFedoraCI,
-        )
-
-    @classmethod
-    def get_check_names(
-        cls, service_config: ServiceConfig, project: GitProject, metadata: EventData
-    ) -> list[str]:
-        return [
-            DownstreamTestingFarmJobHelper.get_check_name(t)
-            for t in DownstreamTestingFarmJobHelper.get_fedora_ci_tests(
-                service_config, project, metadata
-            )
-        ]
-
-    def _get_or_create_group(
-        self,
-        fedora_ci_tests: list[str],
-    ) -> tuple[TFTTestRunGroupModel, list[TFTTestRunTargetModel]]:
-        """Creates a TFTTestRunGroup.
-
-        If a group is already attached to this handler, it returns the
-        existing group instead.
-
-        Args:
-            fedora_ci_tests: List of Fedora CI tests to run.
-
-        Returns:
-            The existing or created test run group and the test targets
-            to run the tests for.
-
-        """
-        if self._testing_farm_target_id is not None:
-            target_model = TFTTestRunTargetModel.get_by_id(self._testing_farm_target_id)
-            return target_model.group_of_targets, [target_model]
-
-        run_model = self.koji_build.group_of_targets.runs[-1]
-        group = (
-            TFTTestRunGroupModel.create(
-                [run_model], ranch=self.downstream_testing_farm_job_helper.tft_client.default_ranch
-            )
-            if not run_model.test_run_group
-            else run_model.test_run_group
-        )
-
-        # convert dist-git branch to distro
-        [target] = aliases.get_build_targets(self.koji_build.target)
-        distro = target.rsplit("-", 1)[0]
-        distro = DEFAULT_MAPPING_TF.get(distro, distro)
-
-        runs = []
-        for test in fedora_ci_tests:
-            runs.append(  # noqa: PERF401
-                TFTTestRunTargetModel.create(
-                    pipeline_id=None,
-                    identifier=None,
-                    status=TestingFarmResult.new,
-                    target=distro,
-                    web_url=None,
-                    test_run_group=group,
-                    koji_build_targets=[self.koji_build],
-                    # In _payload() we ask TF to test commit_sha of fork (PR's source).
-                    # Store original url. If this proves to work, make it a separate column.
-                    data={"base_project_url": self.project.get_web_url(), "fedora_ci_test": test},
-                ),
-            )
-        return group, runs
-
-    def run_for_fedora_ci_test(
-        self,
-        test_run: "TFTTestRunTargetModel",
-        failed: dict,
-    ):
-        if self.celery_task.retries == 0:
-            self.pushgateway.test_runs_queued.inc()
-        result = self.downstream_testing_farm_job_helper.run_testing_farm(test_run)
-        if not result["success"]:
-            failed[test_run.data["fedora_ci_test"]] = result.get("details")
-
-    def run(self) -> TaskResults:
-        failed: dict[str, str] = {}
-
-        fedora_ci_tests = self.downstream_testing_farm_job_helper.get_fedora_ci_tests(
-            self.service_config, self.project, self.data
-        )
-
-        group, test_runs = self._get_or_create_group(fedora_ci_tests)
-        for test_run in test_runs:
-            # Only retry what's needed
-            if test_run.status not in [
-                TestingFarmResult.new,
-                TestingFarmResult.retry,
-            ]:
-                continue
-            self.run_for_fedora_ci_test(test_run=test_run, failed=failed)
-
-        if not failed:
-            return TaskResults(success=True, details={})
-
-        result_details = {"msg": f"Failed Fedora CI tests: '{failed.keys()}'."}
         result_details.update(failed)
 
         return TaskResults(success=False, details=result_details)

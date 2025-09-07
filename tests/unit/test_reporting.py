@@ -4,6 +4,11 @@
 import pytest
 from flexmock import flexmock
 from gitlab.exceptions import GitlabError
+from packit.config.notifications import (
+    FailureCommentNotificationsConfig,
+    NotificationsConfig,
+)
+
 from ogr import PagureService
 from ogr.abstract import CommitStatus
 from ogr.exceptions import GithubAPIException, GitlabAPIException
@@ -15,11 +20,7 @@ from ogr.services.github.check_run import (
 )
 from ogr.services.gitlab import GitlabProject
 from ogr.services.pagure import PagureProject
-from packit.config.notifications import (
-    FailureCommentNotificationsConfig,
-    NotificationsConfig,
-)
-
+from ogr.services.forgejo.project import ForgejoProject
 from packit_service.worker.reporting import (
     BaseCommitStatus,
     DuplicateCheckMode,
@@ -97,6 +98,62 @@ def test_set_status_pagure(
 
     if pr_id is not None:
         flexmock(PagureProject).should_receive("get_pr").with_args(pr_id).and_return(
+            pr_object,
+        )
+
+    reporter.set_status(state, description, check_name, url)
+
+
+@pytest.mark.parametrize(
+    ("commit_sha,pr_id,pr_object,state,description,check_name,url,state_to_set"),
+    [
+        pytest.param(
+            "7654321",
+            None,
+            None,
+            BaseCommitStatus.success,
+            "We made it!",
+            "packit/pr-rpm-build",
+            "https://api.packit.dev/build/111/logs",
+            CommitStatus.success,
+            id="Forgejo branch",
+        ),
+        pytest.param(
+            "7654321",
+            1,
+            flexmock(source_project=flexmock()),
+            BaseCommitStatus.success,
+            "We made it!",
+            "packit/pr-rpm-build",
+            "https://api.packit.dev/build/111/logs",
+            CommitStatus.success,
+            id="Forgejo PR",
+        ),
+    ],
+)
+def test_set_status_forgejo(
+    commit_sha, pr_id, pr_object, state, description, check_name, url, state_to_set
+):
+    project = ForgejoProject(None, None, None)
+    reporter = StatusReporter.get_instance(
+        project=project,
+        commit_sha=commit_sha,
+        pr_id=pr_id,
+        packit_user="packit",
+    )
+    act_upon = flexmock(pr_object.source_project) if pr_id else flexmock(ForgejoProject)
+
+    act_upon.should_receive("set_commit_status").with_args(
+        commit_sha,
+        state_to_set,
+        url,
+        description,
+        check_name,
+        trim=True,
+    ).once()
+
+    if pr_id is not None:
+        flexmock(ForgejoProject).should_receive("get_pr").with_args(pr_id).and_return(
             pr_object,
         )
 

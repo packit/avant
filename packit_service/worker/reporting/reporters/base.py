@@ -6,11 +6,10 @@ from datetime import datetime, timezone
 from typing import Callable, Optional, Union
 
 from ogr.abstract import GitProject, PullRequest
+from ogr.services.forgejo import ForgejoProject
 from ogr.services.github import GithubProject
 from ogr.services.gitlab import GitlabProject
 from ogr.services.pagure import PagureProject
-
-from ogr.services.forgejo.project import ForgejoProject
 from packit_service.worker.reporting.enums import (
     MAP_TO_CHECK_RUN,
     MAP_TO_COMMIT_STATUS,
@@ -55,19 +54,10 @@ class StatusReporter:
         """
         Get the StatusReporter instance.
         """
-        from .github import StatusReporterGithubChecks
-        from .gitlab import StatusReporterGitlab
-        from .pagure import StatusReporterPagure
         from .forgejo import StatusReporterForgejo
 
         reporter = StatusReporter
-        if isinstance(project, GithubProject):
-            reporter = StatusReporterGithubChecks
-        elif isinstance(project, GitlabProject):
-            reporter = StatusReporterGitlab
-        elif isinstance(project, PagureProject):
-            reporter = StatusReporterPagure
-        elif isinstance(project, ForgejoProject):
+        if isinstance(project, ForgejoProject):
             reporter = StatusReporterForgejo
         return reporter(project, commit_sha, packit_user, project_event_id, pr_id)
 
@@ -87,6 +77,7 @@ class StatusReporter:
 
     @property
     def pull_request_object(self) -> Optional[PullRequest]:
+        logger.debug("\n\nFetching Pull Request Object\n\n")
         if not self._pull_request_object and self.pr_id:
             self._pull_request_object = self.project.get_pr(self.pr_id)
         return self._pull_request_object

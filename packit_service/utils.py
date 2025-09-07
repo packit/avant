@@ -34,8 +34,7 @@ class only_once:
 
     def __call__(self, *args, **kwargs):
         if self.configured:
-            logger.debug(
-                f"Function {self.func.__name__} already called. Skipping.")
+            logger.debug(f"Function {self.func.__name__} already called. Skipping.")
             return None
 
         self.configured = True
@@ -48,8 +47,7 @@ class only_once:
 
 # wrappers for dumping/loading of configs
 def load_package_config(package_config: dict):
-    package_config_obj = PackageConfigSchema().load(
-        package_config) if package_config else None
+    package_config_obj = PackageConfigSchema().load(package_config) if package_config else None
     return PackageConfig.post_load(package_config_obj)
 
 
@@ -80,8 +78,7 @@ def get_package_nvrs(built_packages: list[dict]) -> list[str]:
         epoch = f"{package['epoch']}:" if package["epoch"] else ""
 
         packages.append(
-            f"{package['name']}-{epoch}{package['version']
-                                        }-{package['release']}.{package['arch']}",
+            f"{package['name']}-{epoch}{package['version']}-{package['release']}.{package['arch']}",
         )
     return packages
 
@@ -252,8 +249,7 @@ def pr_labels_match_configuration(
     logger.info(
         f"About to check whether PR labels in PR {pull_request.id} "
         f"match to the labels configuration "
-        f"(label.present: {configured_labels_present}, label.absent: {
-            configured_labels_absent})",
+        f"(label.present: {configured_labels_present}, label.absent: {configured_labels_absent})",
     )
 
     pr_labels = [label.name for label in pull_request.labels]
@@ -278,8 +274,7 @@ def download_file(url: str, path: Path):
     # TODO: use a library to make the downloads more robust (e.g. pycurl),
     # unify with packit code:
     # https://github.com/packit/packit/blob/2e75e6ff4c0cadb55da1c8daf9315e4b0a69e4a8/packit/base_git.py#L566-L583
-    user_agent = os.getenv(
-        "PACKIT_USER_AGENT") or f"packit-service/{ps_version} (hello@packit.dev)"
+    user_agent = os.getenv("PACKIT_USER_AGENT") or f"packit-service/{ps_version} (hello@packit.dev)"
     try:
         with requests.get(
             url,
@@ -302,3 +297,123 @@ def download_file(url: str, path: Path):
 
 def create_new_forgejo_project_for_package(namespace: str, package_name: str):
     pass
+
+
+CUSTOM_SOURCE_SCRIPT = """#!/bin/sh
+set -e
+
+git config --global user.email "hello@packit.dev"
+git config --global user.name "Packit"
+
+resultdir=$PWD
+tmpdir=$(mktemp -d)
+cd "$tmpdir"
+
+echo "Cloning repository..."
+git clone --depth 1 {repo_url} repo
+cd repo
+
+echo "Checking out PR..."
+git fetch origin pull/{pr_id}/head:pr-{pr_id}
+git checkout pr-{pr_id}
+
+echo "Repository checkout completed"
+
+# Find package directory and spec file
+package_name="{package}"
+echo "Looking for package: $package_name"
+
+if [ -n "$package_name" ] && [ -d "$package_name" ]; then
+    echo "Found package directory: $package_name"
+    cd "$package_name"
+    specfile="$package_name.spec"
+    if [ ! -f "$specfile" ]; then
+        specfile=$(find . -maxdepth 1 -name "*.spec" -type f | head -1)
+        if [ -z "$specfile" ]; then
+            echo "Error: No spec file found in $package_name directory"
+            exit 1
+        fi
+    fi
+else
+    # Find spec file in current directory or subdirectories
+    specfile=$(find . -name "*.spec" -type f | head -1)
+    if [ -z "$specfile" ]; then
+        echo "Error: No spec file found in repository"
+        exit 1
+    fi
+    # Change to directory containing the spec file
+    specdir=$(dirname "$specfile")
+    if [ "$specdir" != "." ]; then
+        cd "$specdir"
+        specfile=$(basename "$specfile")
+    fi
+fi
+
+echo "Found spec file: $specfile"
+echo "Working in directory: $(pwd)"
+
+# Run spectool to download sources
+echo "Running spectool to download sources..."
+spectool -g -R "$specfile"
+
+# Create result directory and copy files
+mkdir -p "$resultdir"
+cp "$specfile" "$resultdir/"
+
+# Copy patch files
+echo "Copying patch files..."
+for patch in *.patch; do
+    if [ -f "$patch" ]; then
+        cp "$patch" "$resultdir/"
+    fi
+done
+
+# Copy source files
+echo "Copying source files..."
+for source in *.tar.gz *.tar.bz2 *.tar.xz *.zip *.tgz *.tbz2 *.txz; do
+    if [ -f "$source" ]; then
+        cp "$source" "$resultdir/"
+    fi
+done
+
+# Clean up
+cd "$resultdir"
+rm -rf "$tmpdir"
+
+echo "Source preparation completed successfully"
+echo "Files in result directory:"
+ls -la "$resultdir"
+"""
+
+
+def create_source_script(
+    url: str,
+    ref: Optional[str] = None,
+    pr_id: Optional[str] = None,
+    merge_pr: Optional[bool] = True,
+    target_branch: Optional[str] = None,
+    job_config_index: Optional[int] = None,
+    update_release: bool = True,
+    release_suffix: Optional[str] = None,
+    package: Optional[str] = None,
+    merged_ref: Optional[str] = None,
+):
+    clone_options = []
+    if ref:
+        clone_options += ["--branch", ref]
+    elif pr_id:
+        # For PR, we'll fetch the PR ref specifically
+        clone_options += ["--depth", "1"]
+
+    script_vars = {
+        "repo_url": url,
+        "clone_options": " ".join(clone_options),
+        "pr_id": pr_id or "",
+        "target_branch": target_branch or "main",
+        "merge_pr": "true" if merge_pr else "false",
+        "ref": ref or "",
+        "merged_ref": merged_ref or "",
+        "package": package or "",
+    }
+
+    return CUSTOM_SOURCE_SCRIPT.format(**script_vars)
