@@ -15,7 +15,7 @@ Development is currently taking place in the `service` branch.
 * [x] Commit status
 
 #### Testing
-* [ ] ~~Unit tests~~ (see [packit/validation](https://github.com/packit/validation))
+* [x] see [packit/validation](https://github.com/mynk8/validation)
 * [ ] OGR and Packit Service event tests
 
 ## Running locally
